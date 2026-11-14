@@ -1,0 +1,6 @@
+.yellow-map {
+  position: fixed;
+  inset: 0;
+  background: #f5d547;
+  z-index: -1;
+}

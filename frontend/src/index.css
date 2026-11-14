@@ -33,7 +33,7 @@
 
 body {
   margin: 0;
-  background: var(--fondo);
+  background: transparent;
   color: var(--texto);
   font-family: var(--fuente);
   font-weight: 400;

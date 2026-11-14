@@ -4,7 +4,7 @@
   --inclinacion: calc(var(--alto) * 0.75);
 
   position: relative;
-  width: 30%;
+  width: 40rem;
   margin: 0 auto;
   height: var(--alto);
   background: var(--burnt-rose);
@@ -69,14 +69,4 @@
   background: var(--burnt-rose);
   -webkit-mask: center / contain no-repeat;
   mask: center / contain no-repeat;
-}
-
-.icono-tierra {
-  -webkit-mask-image: url("../assets/icons/tierra.png");
-  mask-image: url("../assets/icons/tierra.png");
-}
-
-.icono-marte {
-  -webkit-mask-image: url("../assets/icons/marte.png");
-  mask-image: url("../assets/icons/marte.png");
 }

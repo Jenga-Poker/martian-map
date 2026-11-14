@@ -1,0 +1,107 @@
+.hud-container {
+  --size: 340px;
+  --escala: 0.353;                 /* tamaño del cuadrado ÷ 340 (120 ÷ 340) */
+
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--size);
+  height: var(--size);
+  transform: translate(-50%, -50%) scale(var(--escala));
+}
+
+.hud-container .hud-ring {
+  position: absolute;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+/* 1. Anillo interior fino */
+.hud-container .inner-line {
+  inset: 31%;
+  border: 2px solid var(--hud-color);
+}
+
+/* 2. Marcas radiales */
+.hud-container .ticks {
+  inset: 26%;
+  background: repeating-conic-gradient(
+    var(--hud-color) 0deg 1.4deg,
+    transparent 1.4deg 4.5deg
+  );
+  -webkit-mask-image: radial-gradient(transparent 60%, #000 61%);
+  mask-image: radial-gradient(transparent 60%, #000 61%);
+  animation: hud-spin-slow 40s linear infinite;
+}
+
+/* 3. Anillo que encierra las marcas */
+.hud-container .mid-line {
+  inset: 24.5%;
+  border: 2px solid var(--hud-color);
+}
+
+/* 4. Bloques cuadrados segmentados */
+.hud-container .blocks {
+  inset: 18.5%;
+  background:
+    conic-gradient(from 275deg, var(--hud-bg) 0deg 220deg, transparent 220deg),
+    repeating-conic-gradient(
+      from 135deg,
+      var(--hud-color) 0deg 6.5deg,
+      transparent 6.5deg 9.5deg
+    );
+  -webkit-mask-image: radial-gradient(transparent 59%, #000 60%);
+  mask-image: radial-gradient(transparent 59%, #000 60%);
+}
+
+/* 5. Doble arco fino */
+.hud-container .double-arc {
+  inset: 19%;
+  border: 2px solid transparent;
+  border-top-color: var(--hud-color);
+  border-right-color: var(--hud-color);
+  transform: rotate(15deg);
+}
+
+.hud-container .double-arc::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: var(--hud-color);
+  border-right-color: var(--hud-color);
+}
+
+/* 6. Anillo estructural principal */
+.hud-container .main-border {
+  inset: 14.5%;
+  border: 3px solid var(--hud-color);
+}
+
+/* 7. Segmentos exteriores gruesos */
+.hud-container .outer-segments {
+  inset: 10%;
+  border: 9px solid transparent;
+  border-left-color: var(--hud-color);
+  border-bottom-color: var(--hud-color);
+  transform: rotate(-12deg);
+  animation: hud-spin-reverse 30s linear infinite;
+}
+
+/* 8. Pestañas exteriores */
+.hud-container .outer-tabs {
+  inset: 8%;
+  border: 3px dashed transparent;
+  border-top-color: var(--hud-color);
+  border-right-color: var(--hud-color);
+  transform: rotate(10deg);
+}
+
+@keyframes hud-spin-slow {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes hud-spin-reverse {
+  to { transform: rotate(-372deg); }
+}
