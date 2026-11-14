@@ -139,7 +139,7 @@ export default function TerrainViewer({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.outputColorSpace = THREE.SRGBColorSpace
     renderer.toneMapping = THREE.ACESFilmicToneMapping
-    renderer.toneMappingExposure = 1.18
+    renderer.toneMappingExposure = 1
     renderer.setClearColor(0x090202, 1)
     renderer.domElement.style.cursor = 'crosshair'
     mount.appendChild(renderer.domElement)
