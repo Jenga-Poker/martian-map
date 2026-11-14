@@ -1,4 +1,4 @@
-import pathfinding
+import libs.pathfinding
 
 def test_shortest_path_with_bundled_jezero_dem():
     """Smoke test against data/jezero_dem_1m.tif using real lat/lon degrees."""
