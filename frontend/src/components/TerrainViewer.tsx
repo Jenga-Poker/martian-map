@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { MARS_PALETTE, type HoverInfo } from '../utils/terrain'
-import type { TerrainModel } from '../terrainModel'
+import type { TerrainModel } from '../utils/terrainModel'
 
 export type CameraMode = 'perspective' | 'top'
 
