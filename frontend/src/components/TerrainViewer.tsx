@@ -192,32 +192,6 @@ export default function TerrainViewer({
     fill.position.set(widthKm * 0.8, widthKm * 0.45, heightKm * 0.9)
     scene.add(fill)
 
-    const starCount = 1800
-    const starPositions = new Float32Array(starCount * 3)
-    for (let i = 0; i < starCount; i += 1) {
-      const direction = new THREE.Vector3(
-        Math.random() * 2 - 1,
-        Math.random() * 2 - 1,
-        Math.random() * 2 - 1,
-      ).normalize()
-      const radius = 150 + Math.random() * 90
-      starPositions[i * 3] = direction.x * radius
-      starPositions[i * 3 + 1] = Math.abs(direction.y) * radius * 0.9 - radius * 0.1
-      starPositions[i * 3 + 2] = direction.z * radius
-    }
-    const starGeometry = new THREE.BufferGeometry()
-    starGeometry.setAttribute(
-      'position',
-      new THREE.BufferAttribute(starPositions, 3),
-    )
-    const starMaterial = new THREE.PointsMaterial({
-      color: 0xfef5eb,
-      size: 0.55,
-      sizeAttenuation: true,
-    })
-    const stars = new THREE.Points(starGeometry, starMaterial)
-    scene.add(stars)
-
     const ringMaterial = new THREE.MeshBasicMaterial({
       color: 0xec733c,
       side: THREE.DoubleSide,
@@ -401,7 +375,6 @@ export default function TerrainViewer({
       controls.update()
       const distance = camera.position.distanceTo(controls.target)
       ring.scale.setScalar(Math.max(0.55, distance / 34))
-      stars.rotation.y += 0.00012
       renderer.render(scene, camera)
     })
 
@@ -434,8 +407,6 @@ export default function TerrainViewer({
       controls.dispose()
       geometry.dispose()
       material.dispose()
-      starGeometry.dispose()
-      starMaterial.dispose()
       ring.geometry.dispose()
       ringMaterial.dispose()
       renderer.dispose()
