@@ -4,6 +4,7 @@ import TerrainViewer, { type CameraMode } from './../components/TerrainViewer'
 import SidePanel from './../components/SidePanel'
 import Loading from './../components/Loading'
 import Button from './../components/Button'
+import SpeechToText from './../components/SpeechToText'
 import { getPoi } from './../data/pois'
 
 import {
@@ -242,6 +243,8 @@ export default function Partial() {
           </p>
         </>
       )}
+
+      <SpeechToText />
     </main>
   )
 }
