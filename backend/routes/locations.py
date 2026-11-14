@@ -18,9 +18,7 @@ def _clean(value: str) -> str:
     return value.strip().strip('"')
 
  
-@router.get("/locations")
-async def get_locations():
-    """Devuelve todos los puntos almacenados en data/locations.csv."""
+def _read_locations():
     if not DATA_FILE.exists():
         raise HTTPException(
             status_code=404, detail=f"No se encontró el archivo de ubicaciones: {DATA_FILE}"
@@ -42,7 +40,7 @@ async def get_locations():
                         "zone": _clean(row.get("ZONE", "")),
                     }
                 )
-        return {"locations": locations}
+        return locations
     except ValueError as exc:
         raise HTTPException(
             status_code=500, detail=f"Error al parsear ubicaciones: {exc}"
@@ -51,6 +49,24 @@ async def get_locations():
         raise HTTPException(
             status_code=500, detail=f"Error al leer ubicaciones: {exc}"
         ) from exc
+
+
+@router.get("/locations")
+async def get_locations():
+    """Devuelve todos los puntos almacenados en data/locations.csv."""
+    return {"locations": _read_locations()}
+
+
+@router.get("/locations/{zone}")
+async def get_locations_by_zone(zone: str):
+    """Devuelve los puntos de data/locations.csv filtrados por zona."""
+    zone_name = zone.strip()
+    locations = [
+        location
+        for location in _read_locations()
+        if location.get("zone", "").strip() == zone_name
+    ]
+    return {"locations": locations}
 
 
 class LocationCreate(BaseModel):
