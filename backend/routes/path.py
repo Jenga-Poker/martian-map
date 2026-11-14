@@ -21,7 +21,8 @@ class PathRequest(BaseModel):
         default=None,
         gt=0,
         description="Máxima diferencia de altura permitida entre celdas vecinas; si se supera se bloquea la conexión.",
-    )
+    ),
+    multipliers: tuple[int]
 
 
 @router.post("/path")
@@ -36,6 +37,9 @@ async def calculate_path(request: PathRequest):
             (request.start.lat, request.start.lon),
             (request.end.lat, request.end.lon),
             max_height_diff=request.max_height_diff,
+            height_multiplier_1=request.multipliers[0],
+            height_multiplier_2=request.multipliers[1],
+            height_multiplier_3=request.multipliers[2],
         )
         return result
     except FileNotFoundError as exc:
