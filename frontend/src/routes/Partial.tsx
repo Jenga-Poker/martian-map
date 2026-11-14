@@ -3,8 +3,8 @@ import { useNavigate, useParams } from 'react-router'
 import TerrainViewer, { type CameraMode } from './../components/TerrainViewer'
 import SidePanel from './../components/SidePanel'
 import Loading from './../components/Loading'
-import Button from './../components/Button'
 import SpeechToText from './../components/SpeechToText'
+import discIcon from './../assets/disc-outline.svg'
 import { getPoi } from './../data/pois'
 import {
   MARS_PALETTE,
@@ -31,6 +31,7 @@ export default function Partial() {
   const [cameraMode, setCameraMode] = useState<CameraMode>('perspective')
   const [resetSignal, setResetSignal] = useState(0)
   const [hover, setHover] = useState<HoverInfo | null>(null)
+  const [panelOpen, setPanelOpen] = useState(true)
 
   useEffect(() => {
     let cancelled = false
@@ -106,80 +107,76 @@ export default function Partial() {
 
       {data && meta && (
         <>
-          <SidePanel
-            title="Control del terreno"
-            open
-            onClose={() => navigate('/global')}
-            className="side-panel--terrain"
-            actionLabel="Centrar vista"
-            onGo={() => setResetSignal((signal) => signal + 1)}
+          <button
+            type="button"
+            onClick={() => setResetSignal((signal) => signal + 1)}
+            aria-label="Centrar vista"
+            title="Centrar vista"
+            style={{
+              position: 'absolute',
+              right: '1rem',
+              top: '25%',
+              zIndex: 10,
+              width: '3rem',
+              height: '3rem',
+              padding: 0,
+              border: '2px solid var(--burnt-rose-2)',
+              borderRadius: '50%',
+              background: 'var(--espresso)',
+              color: 'var(--acento)',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 18px 40px rgba(0, 0, 0, 0.45)',
+            }}
           >
-            <section className="terrain-section">
-              <div className="terrain-field">
-                <div className="terrain-field__label">
-                  <span>Exageración vertical</span>
-                  <output>{exaggeration.toFixed(1)}×</output>
+            <img
+              src={discIcon}
+              alt=""
+              aria-hidden="true"
+              style={{
+                width: '60%',
+                height: '60%',
+                objectFit: 'contain',
+                filter:
+                  'brightness(0) saturate(100%) invert(56%) sepia(63%) saturate(1052%) hue-rotate(334deg) brightness(96%) contrast(92%)',
+              }}
+            />
+          </button>
+
+          <div className={`partial-left-group${panelOpen ? ' partial-left-group--open' : ''}`}>
+            <SidePanel
+              title="Panel"
+              open={panelOpen}
+              onBack={() => setPanelOpen(false)}
+              className="side-panel--terrain"
+            />
+            <header className="partial-header">
+              <p className="partial-eyebrow">{poi.terrainLabel}</p>
+              <dl className="partial-facts">
+                <div>
+                  <dt>Área</dt>
+                  <dd>
+                    {area?.width} × {area?.height} km
+                  </dd>
                 </div>
-                <input
-                  type="range"
-                  min="1"
-                  max="8"
-                  step="0.1"
-                  value={exaggeration}
-                  aria-label="Exageración vertical"
-                  onChange={(event) => setExaggeration(Number(event.target.value))}
-                />
-              </div>
-
-              <div className="terrain-segmented" role="group" aria-label="Tipo de cámara">
-                <Button
-                  active={cameraMode === 'perspective'}
-                  aria-pressed={cameraMode === 'perspective'}
-                  onClick={() => setCameraMode('perspective')}
-                >
-                  Perspectiva
-                </Button>
-                <Button
-                  active={cameraMode === 'top'}
-                  aria-pressed={cameraMode === 'top'}
-                  onClick={() => setCameraMode('top')}
-                >
-                  Cenital
-                </Button>
-              </div>
-
-              {/* "Rotación automática" and "Malla del terreno" options removed when the map is shown; kept disabled */}
-
-              <p className="terrain-hint">
-                Arrastra para orbitar · rueda para acercar · clic derecho para desplazar
-              </p>
-            </section>
-          </SidePanel>
-
-          <header className="partial-header">
-            <p className="partial-eyebrow">{poi.terrainLabel}</p>
-            <dl className="partial-facts">
-              <div>
-                <dt>Área</dt>
-                <dd>
-                  {area?.width} × {area?.height} km
-                </dd>
-              </div>
-              <div>
-                <dt>Elevación</dt>
-                <dd>
-                  {formatMeters(meta.minElevation)} / {formatMeters(meta.maxElevation)}
-                </dd>
-              </div>
-              <div>
-                <dt>Centro</dt>
-                <dd>
-                  {formatCoord(meta.center.lat, 'N', 'S')} ·{' '}
-                  {formatCoord(meta.center.lon, 'E', 'W')}
-                </dd>
-              </div>
-            </dl>
-          </header>
+                <div>
+                  <dt>Elevación</dt>
+                  <dd>
+                    {formatMeters(meta.minElevation)} / {formatMeters(meta.maxElevation)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Centro</dt>
+                  <dd>
+                    {formatCoord(meta.center.lat, 'N', 'S')} ·{' '}
+                    {formatCoord(meta.center.lon, 'E', 'W')}
+                  </dd>
+                </div>
+              </dl>
+            </header>
+          </div>
 
           <figure className="partial-legend">
             <figcaption>Elevación</figcaption>
