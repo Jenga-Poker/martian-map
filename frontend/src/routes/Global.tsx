@@ -26,7 +26,9 @@ function Global() {
         title={selectedPoi?.name ?? ""}
         open={!!selectedPoi}
         onClose={handleClose}
-        onGo={() => navigate("/partial")}
+        onGo={() => {
+          if (selectedPoi) navigate(`/partial/${selectedPoi.id}`);
+        }}
       />
     </div>
   );

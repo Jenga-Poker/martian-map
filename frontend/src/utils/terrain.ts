@@ -54,14 +54,15 @@ export function formatCoord(value: number, positive: string, negative: string): 
   return `${Math.abs(value).toFixed(3)}° ${suffix}`
 }
 
-export async function loadTerrain(): Promise<TerrainData> {
-  const metaResponse = await fetch('/terrain/mars_height_meta.json')
+export async function loadTerrain(terrainDir: string): Promise<TerrainData> {
+  const baseUrl = `/terrain/${encodeURIComponent(terrainDir)}`
+  const metaResponse = await fetch(`${baseUrl}/mars_height_meta.json`)
   if (!metaResponse.ok) {
     throw new Error(`No se pudo cargar el metadata (${metaResponse.status})`)
   }
   const meta = (await metaResponse.json()) as TerrainMeta
 
-  const heightResponse = await fetch('/terrain/mars_height.bin')
+  const heightResponse = await fetch(`${baseUrl}/mars_height.bin`)
   if (!heightResponse.ok) {
     throw new Error(`No se pudo cargar el heightmap (${heightResponse.status})`)
   }

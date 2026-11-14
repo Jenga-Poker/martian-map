@@ -7,6 +7,7 @@ function App() {
     <Routes>
       <Route path="/global" element={<Global />} />
       <Route path="/partial" element={<Partial />} />
+      <Route path="/partial/:poiId" element={<Partial />} />
     </Routes>
   );
 }

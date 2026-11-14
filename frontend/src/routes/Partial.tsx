@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 import TerrainViewer, { type CameraMode } from './../components/TerrainViewer'
 import SidePanel from './../components/SidePanel'
 import Loading from './../components/Loading'
 import Button from './../components/Button'
+import { getPoi } from './../data/pois'
 import {
   MARS_PALETTE,
   formatCoord,
@@ -19,6 +20,8 @@ const legendGradient = `linear-gradient(to top, ${MARS_PALETTE.join(', ')})`
 
 export default function Partial() {
   const navigate = useNavigate()
+  const { poiId } = useParams()
+  const poi = getPoi(poiId)
   const [data, setData] = useState<TerrainData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [exaggeration, setExaggeration] = useState(3.5)
@@ -30,7 +33,10 @@ export default function Partial() {
 
   useEffect(() => {
     let cancelled = false
-    loadTerrain()
+    setData(null)
+    setError(null)
+    setHover(null)
+    loadTerrain(poi.terrainDir)
       .then((terrain) => {
         if (!cancelled) setData(terrain)
       })
@@ -45,7 +51,7 @@ export default function Partial() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [poi])
 
   const model = useMemo(
     () => (data ? createTerrainModel(data) : null),
@@ -81,10 +87,16 @@ export default function Partial() {
       </div>
 
       {!data && !error && (
-        <Loading
-          title="Procesando el relieve de Marte"
-          subtitle="1024 × 1024 muestras del DEM · 1 m/px"
-        />
+        <div className="partial-loading">
+          <div className="partial-loader-orbit" aria-hidden="true">
+            <span className="partial-loader-planet" />
+            <span className="partial-loader-moon" />
+          </div>
+          <p className="partial-loading-title">Procesando el relieve de Marte</p>
+          <p className="partial-loading-sub">
+            {poi.name} · 1024 × 1024 muestras del DEM
+          </p>
+        </div>
       )}
 
       {error && (
@@ -92,8 +104,9 @@ export default function Partial() {
           <p className="partial-error-eyebrow">No se pudo abrir el visor</p>
           <h2>{error}</h2>
           <p>
-            Genera de nuevo el heightmap con <code>python backend/process_dem.py</code> y
-            recarga la página.
+            Comprueba que el modelo exista en{' '}
+            <code>frontend/public/terrain/{poi.terrainDir}</code> y recarga la
+            página.
           </p>
         </div>
       )}
@@ -174,7 +187,7 @@ export default function Partial() {
           </SidePanel>
 
           <header className="partial-header">
-            <p className="partial-eyebrow">Marte · Cráter Jezero</p>
+            <p className="partial-eyebrow">{poi.terrainLabel}</p>
             <dl className="partial-facts">
               <div>
                 <dt>Área</dt>

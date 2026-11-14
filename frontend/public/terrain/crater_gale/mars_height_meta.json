@@ -1,0 +1,34 @@
+{
+  "width": 1024,
+  "height": 1024,
+  "nodata": 65535,
+  "dtype": "uint16",
+  "minElevation": -4545.76,
+  "maxElevation": -2903.68,
+  "colorMin": -4533.73,
+  "colorMax": -3459.19,
+  "widthMeters": 11856.0,
+  "heightMeters": 17783.0,
+  "sourcePixelSizeMeters": 1.0,
+  "sourceWidth": 11856,
+  "sourceHeight": 17783,
+  "sourceBoundsPx": {
+    "x0": 0,
+    "y0": 0,
+    "x1": 11856,
+    "y1": 17783
+  },
+  "validRatio": 0.9309,
+  "bounds": {
+    "latMin": -4.75001,
+    "latMax": -4.45,
+    "lonMin": 137.35,
+    "lonMax": 137.55002
+  },
+  "center": {
+    "lat": -4.60001,
+    "lon": 137.45001
+  },
+  "crs": "Mars 2000 Sphere / Equirectangular",
+  "sourceFile": "gale_dem_1m.tif"
+}
