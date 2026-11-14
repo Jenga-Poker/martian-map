@@ -151,30 +151,7 @@ export default function Partial() {
                 </Button>
               </div>
 
-              <div className="terrain-toggles">
-                <label className="terrain-switch">
-                  <input
-                    type="checkbox"
-                    checked={autoRotate}
-                    onChange={(event) => setAutoRotate(event.target.checked)}
-                  />
-                  <span className="terrain-switch__track" aria-hidden="true">
-                    <span className="terrain-switch__knob" />
-                  </span>
-                  <span>Rotación automática</span>
-                </label>
-                <label className="terrain-switch">
-                  <input
-                    type="checkbox"
-                    checked={wireframe}
-                    onChange={(event) => setWireframe(event.target.checked)}
-                  />
-                  <span className="terrain-switch__track" aria-hidden="true">
-                    <span className="terrain-switch__knob" />
-                  </span>
-                  <span>Malla del terreno</span>
-                </label>
-              </div>
+              {/* "Rotación automática" and "Malla del terreno" options removed when the map is shown; kept disabled */}
 
               <p className="terrain-hint">
                 Arrastra para orbitar · rueda para acercar · clic derecho para desplazar
