@@ -1,0 +1,34 @@
+{
+  "width": 1024,
+  "height": 1024,
+  "nodata": 65535,
+  "dtype": "uint16",
+  "minElevation": -2665.23,
+  "maxElevation": -1740.68,
+  "colorMin": -2645.99,
+  "colorMax": -2038.82,
+  "widthMeters": 16803.0,
+  "heightMeters": 17370.0,
+  "sourcePixelSizeMeters": 1.0,
+  "sourceWidth": 17783,
+  "sourceHeight": 17784,
+  "sourceBoundsPx": {
+    "x0": 0,
+    "y0": 0,
+    "x1": 16803,
+    "y1": 17370
+  },
+  "validRatio": 0.772,
+  "bounds": {
+    "latMin": 18.30697,
+    "latMax": 18.60001,
+    "lonMin": 77.3,
+    "lonMax": 77.58347
+  },
+  "center": {
+    "lat": 18.45349,
+    "lon": 77.44174
+  },
+  "crs": "Mars 2000 Sphere / Equirectangular",
+  "sourceFile": "jezero_dem_1m.tif"
+}
