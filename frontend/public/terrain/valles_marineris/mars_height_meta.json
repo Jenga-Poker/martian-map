@@ -1,0 +1,34 @@
+{
+  "width": 1024,
+  "height": 1024,
+  "nodata": 65535,
+  "dtype": "uint16",
+  "minElevation": -5741.03,
+  "maxElevation": 6820.04,
+  "colorMin": -4438.82,
+  "colorMax": 5012.44,
+  "widthMeters": 209554.8,
+  "heightMeters": 83836.1,
+  "sourcePixelSizeMeters": 1.0,
+  "sourceWidth": 14820,
+  "sourceHeight": 5929,
+  "sourceBoundsPx": {
+    "x0": 0,
+    "y0": 0,
+    "x1": 14820,
+    "y1": 5929
+  },
+  "validRatio": 0.9319,
+  "bounds": {
+    "latMin": -0.10003,
+    "latMax": 0.0,
+    "lonMin": -0.00152,
+    "lonMax": 0.2485
+  },
+  "center": {
+    "lat": -0.05001,
+    "lon": 0.12349
+  },
+  "crs": "Mars 2000 Sphere / Equirectangular",
+  "sourceFile": "valles_marineris_dem_200m.tif"
+}
