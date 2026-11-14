@@ -9,27 +9,33 @@ router = APIRouter(tags=["path"])
 
 
 class Coordinate(BaseModel):
-    row: int = Field(..., ge=0, description="Fila (píxel) en el DEM")
-    col: int = Field(..., ge=0, description="Columna (píxel) en el DEM")
+    lat: float = Field(..., description="Latitud en grados")
+    lon: float = Field(..., description="Longitud en grados")
 
 
 class PathRequest(BaseModel):
     zone: str = Field(..., description="Nombre del archivo/zona dentro de data/*.tif")
     start: Coordinate
     end: Coordinate
-    margin: int = Field(50, ge=0, le=2000, description="Margen alrededor del área de búsqueda")
+    max_height_diff: float | None = Field(
+        default=None,
+        gt=0,
+        description="Máxima diferencia de altura permitida entre celdas vecinas; si se supera se bloquea la conexión.",
+    )
 
 
 @router.post("/path")
 async def calculate_path(request: PathRequest):
-    """Calcula el camino más corto entre dos coordenadas en un DEM de data/."""
+    """Calcula el camino más corto entre dos coordenadas geográficas en un DEM de data/."""
+    print("ME PANCEARON")
+
     try:
         result = await asyncio.to_thread(
             shortest_path,
             request.zone,
-            (request.start.row, request.start.col),
-            (request.end.row, request.end.col),
-            request.margin,
+            (request.start.lat, request.start.lon),
+            (request.end.lat, request.end.lon),
+            max_height_diff=request.max_height_diff,
         )
         return result
     except FileNotFoundError as exc:
