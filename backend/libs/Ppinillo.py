@@ -9,5 +9,14 @@ def test_shortest_path_with_bundled_jezero_dem():
 
     print(result)
 
+def test_shortest_path_with_bundled_valles_dem():
+    """Smoke test against data/jezero_dem_1m.tif using real lat/lon degrees."""
+    start = (0.08, )
+    end = (18.44, 77.44)  
 
-test_shortest_path_with_bundled_jezero_dem()
+    result = pathfinding.shortest_path("valles_marineris_dem_200m", start, end, max_height_diff=0.4, height_multiplier_1=1.0, height_multiplier_2=5.0, height_multiplier_3=50.0)
+
+    print(result)
+
+
+test_shortest_path_with_bundled_valles_dem() 
