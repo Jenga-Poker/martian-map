@@ -32,13 +32,13 @@ export type HoverInfo = {
 
 /** Paleta de elevación basada en los rojos de la app, de sombra a cima iluminada. */
 export const MARS_PALETTE = [
-  '#090202',
-  '#2a120b',
-  '#3a1710',
-  '#5c2416',
-  '#8a3a22',
-  '#b8572f',
-  '#d56738',
+  '#5a1f14',
+  '#7a2a1a',
+  '#9c3720',
+  '#b8442a',
+  '#d2563a',
+  '#e86d4a',
+  '#f58b66',
 ]
 
 const numberFormat = new Intl.NumberFormat('es-ES', {
