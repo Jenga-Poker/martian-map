@@ -5,9 +5,10 @@ import Button from "./Button";
 type SidePanelProps = {
   title: string;
   open?: boolean;
+  onBack?: () => void;
+  onClose?: () => void;
   onGo?: () => void;
   actionLabel?: string;
-  onClose?: () => void;
   children?: ReactNode;
   className?: string;
   headerExtra?: ReactNode;
@@ -16,26 +17,27 @@ type SidePanelProps = {
 export default function SidePanel({
   title,
   open = true,
+  onBack,
+  onClose,
   onGo,
   actionLabel = "Ir",
-  onClose,
   children,
   className = "",
   headerExtra,
 }: SidePanelProps) {
+  const backHandler = onBack ?? onClose;
   return (
     <aside
       className={`side-panel${open ? " side-panel--open" : ""}${className ? ` ${className}` : ""}`}
       aria-label={title}
-      aria-hidden={!open}
     >
       <div className="side-panel__header">
-        {onClose && (
+        {backHandler && (
           <button
             type="button"
             className="side-panel__close"
-            onClick={onClose}
-            aria-label="Cerrar panel"
+            onClick={backHandler}
+            aria-label={onBack ? "Volver a la vista general" : "Cerrar panel"}
           >
             <span
               className="side-panel__close-icon"
