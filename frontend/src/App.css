@@ -353,7 +353,7 @@
   position: absolute;
   top: 1rem;
   left: 21rem;
-  right: 1rem;
+  right: 8rem;
   z-index: 5;
   max-width: 34rem;
   padding: 0.85rem 1rem;
@@ -397,8 +397,8 @@
 
 .partial-legend {
   position: absolute;
+  top: 1rem;
   right: 1rem;
-  bottom: 4.2rem;
   z-index: 5;
   margin: 0;
   padding: 0.75rem 0.85rem;
@@ -491,6 +491,184 @@
   margin: 0;
   font-size: 0.62rem;
   color: var(--texto);
+}
+
+/* Dictado por voz en la vista parcial */
+.speech-dictation {
+  position: absolute;
+  right: 1rem;
+  bottom: 1.5rem;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.65rem;
+}
+
+.speech-dictation__panel {
+  width: min(20rem, calc(100vw - 2rem));
+  padding: 0.8rem 0.95rem;
+  border: 2px solid var(--burnt-rose-2);
+  border-radius: 14px;
+  background: var(--espresso);
+  color: var(--texto);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+
+.speech-dictation__panel.is-error {
+  border-color: var(--peligro);
+}
+
+.speech-dictation__label {
+  margin: 0 0 0.35rem;
+  font-family: var(--fuente-titulo);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--acento);
+}
+
+.speech-dictation__text {
+  margin: 0;
+  min-height: 1.2rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.speech-dictation__interim {
+  color: color-mix(in srgb, var(--texto) 55%, transparent);
+}
+
+.speech-dictation__placeholder {
+  color: color-mix(in srgb, var(--texto) 55%, transparent);
+}
+
+.speech-dictation__error {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--peligro);
+}
+
+.speech-dictation__caret {
+  display: inline-block;
+  width: 1px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--acento);
+  animation: speech-caret 1s steps(2, start) infinite;
+}
+
+.speech-dictation__thinking {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.55rem;
+}
+
+.speech-dictation__thinking span {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--acento);
+  animation: speech-thinking 1s ease-in-out infinite;
+}
+
+.speech-dictation__thinking span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.speech-dictation__thinking span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.speech-dictation__button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.4rem;
+  height: 3.4rem;
+  padding: 0;
+  border: 2px solid var(--burnt-rose-2);
+  border-radius: 50%;
+  background: var(--espresso);
+  color: var(--acento);
+  cursor: pointer;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.speech-dictation__button:hover:not(:disabled) {
+  border-color: var(--acento);
+  transform: translateY(-1px);
+}
+
+.speech-dictation__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.speech-dictation__button.is-listening {
+  border-color: var(--acento);
+  background: color-mix(in srgb, var(--acento) 18%, var(--espresso));
+}
+
+.speech-dictation__button.is-thinking {
+  border-color: var(--acento);
+}
+
+.speech-dictation__icon {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.speech-dictation__pulse {
+  position: absolute;
+  inset: -0.35rem;
+  border: 2px solid var(--acento);
+  border-radius: 50%;
+  animation: speech-pulse 1.6s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes speech-caret {
+  0%,
+  100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes speech-thinking {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  40% {
+    transform: translateY(-0.35rem);
+    opacity: 1;
+  }
+}
+
+@keyframes speech-pulse {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .speech-dictation__caret,
+  .speech-dictation__thinking span,
+  .speech-dictation__pulse {
+    animation: none;
+  }
 }
 
 .app-loading {
