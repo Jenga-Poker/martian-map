@@ -6,7 +6,11 @@ services:
     volumes:
       - ./data:/data:ro
     environment:
-      - MESSAGE_FILE=/data/message.txt
+      # Dentro de Docker, Ollama corre en el host (OLLAMA_HOST=0.0.0.0:11434)
+      - OLLAMA_URL=http://host.docker.internal:11434
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   frontend:
     build: ./frontend
