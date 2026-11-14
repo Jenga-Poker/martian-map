@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import TerrainViewer, { type CameraMode } from './../components/TerrainViewer'
+import TerrainViewer, {
+  type AstronautPosition,
+  type CameraMode,
+} from './../components/TerrainViewer'
 import SidePanel from './../components/SidePanel'
 import Loading from './../components/Loading'
 import discIcon from './../assets/disc-outline.svg'
@@ -33,6 +36,11 @@ export default function Partial() {
   const [resetSignal, setResetSignal] = useState(0)
   const [hover, setHover] = useState<HoverInfo | null>(null)
   const [panelOpen, setPanelOpen] = useState(true)
+  const [astronaut, setAstronaut] = useState<AstronautPosition | null>(null)
+
+  useEffect(() => {
+    setAstronaut(null)
+  }, [poi.id])
 
   useEffect(() => {
     let cancelled = false
@@ -85,6 +93,10 @@ export default function Partial() {
             resetSignal={resetSignal}
             onHover={setHover}
             onError={setError}
+            astronaut={astronaut}
+            onAstronautSelect={(position) => {
+              setAstronaut(position)
+            }}
           />
         )}
       </div>
@@ -205,7 +217,9 @@ export default function Partial() {
               </>
             ) : (
               <span className="partial-readout__idle">
-                Pasa el cursor sobre el relieve para leer la altura
+                {astronaut
+                  ? 'Pasa el cursor sobre el relieve para leer la altura'
+                  : 'Selecciona en el relieve la posición inicial del astronauta'}
               </span>
             )}
           </div>

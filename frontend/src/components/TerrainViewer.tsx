@@ -6,6 +6,12 @@ import type { TerrainModel } from '../utils/terrainModel'
 
 export type CameraMode = 'perspective' | 'top'
 
+export type AstronautPosition = {
+  lat: number
+  lon: number
+  elevation: number
+}
+
 type Props = {
   model: TerrainModel
   exaggeration: number
@@ -15,6 +21,8 @@ type Props = {
   resetSignal: number
   onHover: (info: HoverInfo | null) => void
   onError: (message: string) => void
+  astronaut: AstronautPosition | null
+  onAstronautSelect?: (position: AstronautPosition) => void
 }
 
 type SceneApi = {
@@ -23,6 +31,7 @@ type SceneApi = {
   setWireframe: (value: boolean) => void
   applyCameraMode: (mode: CameraMode) => void
   reset: () => void
+  setAstronaut: (position: AstronautPosition | null) => void
 }
 
 const BASE_EXAGGERATION = 3.5
@@ -60,6 +69,8 @@ export default function TerrainViewer({
   resetSignal,
   onHover,
   onError,
+  astronaut,
+  onAstronautSelect,
 }: Props) {
   const mountRef = useRef<HTMLDivElement>(null)
   const apiRef = useRef<SceneApi | null>(null)
@@ -67,12 +78,16 @@ export default function TerrainViewer({
   const cameraModeRef = useRef(cameraMode)
   const onHoverRef = useRef(onHover)
   const onErrorRef = useRef(onError)
+  const onAstronautSelectRef = useRef(onAstronautSelect)
+  const astronautRef = useRef(astronaut)
 
   useEffect(() => {
     onHoverRef.current = onHover
     onErrorRef.current = onError
     exaggerationRef.current = exaggeration
     cameraModeRef.current = cameraMode
+    onAstronautSelectRef.current = onAstronautSelect
+    astronautRef.current = astronaut
   })
 
   useEffect(() => {
@@ -200,6 +215,92 @@ export default function TerrainViewer({
     ring.rotation.x = -Math.PI / 2
     ring.visible = false
     scene.add(ring)
+
+    const marker = new THREE.Group()
+    marker.visible = false
+    const markerColor = new THREE.Color(MARS_PALETTE[MARS_PALETTE.length - 1])
+    const markerMat = new THREE.MeshStandardMaterial({
+      color: markerColor,
+      emissive: new THREE.Color(MARS_PALETTE[3]),
+      emissiveIntensity: 0.35,
+      roughness: 0.4,
+      metalness: 0.05,
+    })
+    const markerPole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.035, 0.035, 0.42, 16),
+      markerMat,
+    )
+    markerPole.position.y = 0.21
+    const markerHead = new THREE.Mesh(
+      new THREE.SphereGeometry(0.11, 20, 20),
+      markerMat,
+    )
+    markerHead.position.y = 0.48
+    const markerBase = new THREE.Mesh(
+      new THREE.RingGeometry(0.14, 0.22, 32),
+      new THREE.MeshBasicMaterial({ color: markerColor, side: THREE.DoubleSide }),
+    )
+    markerBase.rotation.x = -Math.PI / 2
+    markerBase.position.y = 0.02
+    marker.add(markerBase, markerPole, markerHead)
+    scene.add(marker)
+
+    const pickTerrain = (clientX: number, clientY: number) => {
+      const rect = renderer.domElement.getBoundingClientRect()
+      if (rect.width === 0 || rect.height === 0) return null
+      pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1
+      pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1
+      raycaster.setFromCamera(pointer, camera)
+      const ray = raycaster.ray
+      const entry = ray.intersectBox(terrainBox, rayA)
+      if (!entry) return null
+      const tStart = ray.origin.distanceTo(entry)
+      const marchLength = Math.max(40, camera.position.distanceTo(entry) + 12)
+      const steps = 320
+      let previousT = tStart
+      for (let step = 1; step <= steps; step += 1) {
+        const t = tStart + (marchLength * step) / steps
+        ray.at(t, rayC)
+        const current = model.sampleAt(rayC.x, rayC.z, exaggerationRef.current, sample)
+        if (current && rayC.y <= current.y) {
+          let lo = previousT
+          let hi = t
+          let hit = current
+          for (let iteration = 0; iteration < 12; iteration += 1) {
+            const midT = (lo + hi) / 2
+            ray.at(midT, rayA)
+            const refined = model.sampleAt(rayA.x, rayA.z, exaggerationRef.current, midSample)
+            if (refined && rayA.y <= refined.y) {
+              hi = midT
+              hit = refined
+            } else {
+              lo = midT
+            }
+          }
+          ray.at(hi, hitPoint)
+          const { lat, lon } = model.worldToGeo(hitPoint.x, hitPoint.z)
+          return { x: hitPoint.x, z: hitPoint.z, y: hit.y, elevation: hit.elevation, lat, lon }
+        }
+        previousT = t
+      }
+      return null
+    }
+
+    const updateMarker = (pos: AstronautPosition | null) => {
+      if (!pos) {
+        marker.visible = false
+        return
+      }
+      const { x, z } = model.geoToWorld(pos)
+      const sampled = model.sampleAt(x, z, exaggerationRef.current, sample)
+      if (!sampled) {
+        marker.visible = false
+        return
+      }
+      marker.position.set(x, sampled.y, z)
+      marker.visible = true
+    }
+    updateMarker(astronautRef.current)
 
     const terrainBox = new THREE.Box3(
       new THREE.Vector3(-widthKm / 2 - 1, -12, -heightKm / 2 - 1),
@@ -348,8 +449,32 @@ export default function TerrainViewer({
       onHoverRef.current(null)
     }
 
+    let downX = 0
+    let downY = 0
+    const onPointerDown = (event: PointerEvent) => {
+      downX = event.clientX
+      downY = event.clientY
+    }
+    const onClick = (event: MouseEvent) => {
+      if (astronautRef.current) return
+      if (!onAstronautSelectRef.current) return
+      const dx = event.clientX - downX
+      const dy = event.clientY - downY
+      if (dx * dx + dy * dy > 36) return
+      const hit = pickTerrain(event.clientX, event.clientY)
+      if (hit) {
+        onAstronautSelectRef.current({
+          lat: hit.lat,
+          lon: hit.lon,
+          elevation: hit.elevation,
+        })
+      }
+    }
+
     renderer.domElement.addEventListener('pointermove', onPointerMove)
     renderer.domElement.addEventListener('pointerleave', onPointerLeave)
+    renderer.domElement.addEventListener('pointerdown', onPointerDown)
+    renderer.domElement.addEventListener('click', onClick)
 
     const resize = () => {
       const { clientWidth, clientHeight } = mount
@@ -375,6 +500,7 @@ export default function TerrainViewer({
       controls.update()
       const distance = camera.position.distanceTo(controls.target)
       ring.scale.setScalar(Math.max(0.55, distance / 34))
+      marker.scale.setScalar(Math.max(0.6, distance / 28))
       renderer.render(scene, camera)
     })
 
@@ -382,6 +508,7 @@ export default function TerrainViewer({
       setExaggeration: (value: number) => {
         exaggerationRef.current = value
         terrain.scale.y = value / BASE_EXAGGERATION
+        updateMarker(astronautRef.current)
       },
       setAutoRotate: (value: boolean) => {
         controls.autoRotate = value
@@ -395,12 +522,18 @@ export default function TerrainViewer({
       reset: () => {
         moveCamera(cameraModeRef.current)
       },
+      setAstronaut: (position: AstronautPosition | null) => {
+        astronautRef.current = position
+        updateMarker(position)
+      },
     }
 
     return () => {
       controls.removeEventListener('start', cancelFlight)
       renderer.domElement.removeEventListener('pointermove', onPointerMove)
       renderer.domElement.removeEventListener('pointerleave', onPointerLeave)
+      renderer.domElement.removeEventListener('pointerdown', onPointerDown)
+      renderer.domElement.removeEventListener('click', onClick)
       if (hoverFrame) cancelAnimationFrame(hoverFrame)
       observer.disconnect()
       renderer.setAnimationLoop(null)
@@ -409,6 +542,11 @@ export default function TerrainViewer({
       material.dispose()
       ring.geometry.dispose()
       ringMaterial.dispose()
+      markerPole.geometry.dispose()
+      markerHead.geometry.dispose()
+      markerBase.geometry.dispose()
+      markerMat.dispose()
+      ;(markerBase.material as THREE.Material).dispose()
       renderer.dispose()
       if (renderer.domElement.parentElement === mount) {
         mount.removeChild(renderer.domElement)
@@ -437,12 +575,16 @@ export default function TerrainViewer({
     if (resetSignal > 0) apiRef.current?.reset()
   }, [resetSignal])
 
+  useEffect(() => {
+    apiRef.current?.setAstronaut(astronaut)
+  }, [astronaut])
+
   return (
     <div
       className="stage"
       ref={mountRef}
       role="img"
-      aria-label="Modelo 3D del relieve del cráter Jezero"
+      aria-label="Modelo 3D del relieve de Marte"
     />
   )
 }
