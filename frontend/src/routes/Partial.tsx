@@ -6,7 +6,6 @@ import Loading from './../components/Loading'
 import Button from './../components/Button'
 import SpeechToText from './../components/SpeechToText'
 import { getPoi } from './../data/pois'
-
 import {
   MARS_PALETTE,
   formatCoord,
@@ -87,14 +86,12 @@ export default function Partial() {
           />
         )}
       </div>
-
       {!data && !error && (
         <Loading
           title="Procesando el relieve de Marte"
-          subtitle="1024 × 1024 muestras del DEM · 1 m/px"
+          subtitle={`${poi.name} · 1024 × 1024 muestras del DEM · 1 m/px`}
         />
       )}
-
       {error && (
         <div className="partial-error" role="alert">
           <p className="partial-error-eyebrow">No se pudo abrir el visor</p>

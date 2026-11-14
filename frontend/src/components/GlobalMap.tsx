@@ -4,7 +4,6 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import "../App.css";
 import Loading from "./Loading";
 import { POIS, type Poi } from "../data/pois";
-
 export type { Poi };
 
 const MARS_TEXTURE_URL = "/mars_viking_8k.png";

@@ -25,15 +25,15 @@ ACTIONS = {
             "Extrae los parámetros para la acción generate_path.\n"
             "Devuelve SOLO un objeto JSON válido con estas claves:\n"
             '- "zone": nombre de la zona/archivo sin extensión si es posible (string)\n'
-            '- "start": {"row": <entero>, "col": <entero>}\n'
-            '- "end": {"row": <entero>, "col": <entero>}\n'
-            '- "margin": entero (opcional, por defecto 50)\n\n'
+            '- "start": {"lat": <número>, "lon": <número>}\n'
+            '- "end": {"lat": <número>, "lon": <número>}\n\n'
             "Reglas:\n"
             "- Usa solo la información dada por el usuario.\n"
-            "- Si falta un dato, usa null para ese valor (o 50 para margin).\n"
+            "- Las coordenadas son geográficas en grados (lat/lon).\n"
+            "- Si falta un dato, usa null para ese valor.\n"
             "- No añadas texto fuera del JSON.\n\n"
             "Ejemplo de salida:\n"
-            '{"zone":"jezero_dem_1m","start":{"row":100,"col":150},"end":{"row":800,"col":950},"margin":50}'
+            '{"zone":"jezero_dem_1m","start":{"lat":18.427,"lon":77.5},"end":{"lat":18.526,"lon":77.332}}'
         ),
     }
 }
