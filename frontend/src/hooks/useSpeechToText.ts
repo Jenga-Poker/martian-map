@@ -2,7 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 export type SpeechStatus = 'idle' | 'listening' | 'thinking'
 
-const THINKING_MS = 2400
+export interface AIResult {
+  action: string
+  options: Record<string, any>
+}
 
 type SpeechAlternative = {
   transcript: string
@@ -70,12 +73,14 @@ export function useSpeechToText() {
   const [interim, setInterim] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [supported, setSupported] = useState(false)
+  const [aiResult, setAiResult] = useState<AIResult | null>(null)
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const statusRef = useRef<SpeechStatus>('idle')
   const finalRef = useRef('')
   const interimRef = useRef('')
   const timerRef = useRef<number | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const updateStatus = useCallback((next: SpeechStatus) => {
     statusRef.current = next
@@ -89,10 +94,50 @@ export function useSpeechToText() {
     }
   }, [])
 
+  const sendToAI = useCallback(async (instruction: string) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
+    updateStatus('thinking')
+    try {
+      const response = await fetch('http://localhost:8000/ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ instruction }),
+        signal: controller.signal,
+      })
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null)
+        throw new Error(errData?.detail || `Error en servidor (${response.status})`)
+      }
+
+      const data: AIResult = await response.json()
+      setAiResult(data)
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        setError(err.message || 'Error al comunicarse con la IA.')
+      }
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null
+        updateStatus('idle')
+      }
+    }
+  }, [updateStatus])
+
   useEffect(() => {
     setSupported(getRecognitionConstructor() !== null)
     return () => {
       clearTimer()
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
       const recognition = recognitionRef.current
       if (!recognition) return
       recognition.onstart = null
@@ -116,6 +161,11 @@ export function useSpeechToText() {
     }
 
     clearTimer()
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+
     const recognition = new Recognition()
     recognition.lang = 'en-US'
     recognition.continuous = false
@@ -127,6 +177,7 @@ export function useSpeechToText() {
     setTranscript('')
     setInterim('')
     setError(null)
+    setAiResult(null)
 
     recognition.onstart = () => {
       updateStatus('listening')
@@ -171,11 +222,7 @@ export function useSpeechToText() {
         return
       }
 
-      updateStatus('thinking')
-      timerRef.current = window.setTimeout(() => {
-        timerRef.current = null
-        updateStatus('idle')
-      }, THINKING_MS)
+      void sendToAI(spoken)
     }
 
     recognitionRef.current = recognition
@@ -187,16 +234,35 @@ export function useSpeechToText() {
       updateStatus('idle')
       setError('No se pudo iniciar el dictado.')
     }
-  }, [clearTimer, updateStatus])
+  }, [clearTimer, updateStatus, sendToAI])
 
   const stop = useCallback(() => {
     recognitionRef.current?.stop()
   }, [])
+
+  const reset = useCallback(() => {
+    clearTimer()
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+    try {
+      recognitionRef.current?.abort()
+    } catch {
+      // ignore
+    }
+    recognitionRef.current = null
+    updateStatus('idle')
+    setTranscript('')
+    setInterim('')
+    setError(null)
+    setAiResult(null)
+  }, [clearTimer, updateStatus])
 
   const toggle = useCallback(() => {
     if (statusRef.current === 'idle') start()
     else if (statusRef.current === 'listening') stop()
   }, [start, stop])
 
-  return { status, transcript, interim, error, supported, toggle }
+  return { status, transcript, interim, error, supported, aiResult, toggle, reset }
 }

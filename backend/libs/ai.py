@@ -20,19 +20,19 @@ OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")
 
 ACTIONS = {
     "generate_path": {
-        "description": "Calcular la ruta/camino más corto entre dos puntos en una zona (archivo DEM .tif).",
+        "description": "Calculate the shortest route/path between two points in an area (DEM .tif file).",
         "params_prompt": (
-            "Extrae los parámetros para la acción generate_path.\n"
-            "Devuelve SOLO un objeto JSON válido con estas claves:\n"
-            '- "zone": nombre de la zona/archivo sin extensión si es posible (string)\n'
-            '- "start": {"row": <entero>, "col": <entero>}\n'
-            '- "end": {"row": <entero>, "col": <entero>}\n'
-            '- "margin": entero (opcional, por defecto 50)\n\n'
-            "Reglas:\n"
-            "- Usa solo la información dada por el usuario.\n"
-            "- Si falta un dato, usa null para ese valor (o 50 para margin).\n"
-            "- No añadas texto fuera del JSON.\n\n"
-            "Ejemplo de salida:\n"
+            "Extract the parameters for the generate_path action.\n"
+            "Return ONLY a valid JSON object with these keys:\n"
+            '- "zone": name of the zone/file without extension if possible (string)\n'
+            '- "start": {"row": <integer>, "col": <integer>}\n'
+            '- "end": {"row": <integer>, "col": <integer>}\n'
+            '- "margin": integer (optional, default 50)\n\n'
+            "Rules:\n"
+            "- Use only the information provided by the user.\n"
+            "- If a parameter is missing, use null for that value (or 50 for margin).\n"
+            "- Do not add any text outside the JSON.\n\n"
+            "Example output:\n"
             '{"zone":"jezero_dem_1m","start":{"row":100,"col":150},"end":{"row":800,"col":950},"margin":50}'
         ),
     }
@@ -107,13 +107,13 @@ async def _select_action(instruction: str) -> str:
         f"- {name}: {info['description']}" for name, info in ACTIONS.items()
     )
     prompt = (
-        "Eres un clasificador de acciones. "
-        "Elige la acción que mejor coincide con la instrucción del usuario.\n\n"
-        "Acciones disponibles:\n"
+        "You are an action classifier. "
+        "Choose the action that best matches the user's instruction.\n\n"
+        "Available actions:\n"
         f"{actions_list}\n\n"
-        f'Instrucción del usuario: "{instruction}"\n\n'
-        "Responde SOLO con el nombre exacto de la acción. "
-        "No escribas explicaciones ni puntuación adicional."
+        f'User instruction: "{instruction}"\n\n'
+        "Respond ONLY with the exact action name. "
+        "Do not write explanations or additional punctuation."
     )
     raw = await generate(prompt, as_json=False)
     return _normalize_action(str(raw))
@@ -126,12 +126,12 @@ async def _extract_options(action: str, instruction: str) -> dict[str, Any]:
 
     prompt = (
         f"{action_info['params_prompt']}\n\n"
-        f'Instrucción del usuario: "{instruction}"\n\n'
-        "Salida JSON:"
+        f'User instruction: "{instruction}"\n\n'
+        "JSON output:"
     )
     options = await generate(prompt, as_json=True)
     if not isinstance(options, dict):
-        raise ValueError("Los parámetros extraídos deben ser un objeto JSON.")
+        raise ValueError("Extracted parameters must be a JSON object.")
     return options
 
 
