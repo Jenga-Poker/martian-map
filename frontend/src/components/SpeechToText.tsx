@@ -2,21 +2,23 @@ import { useSpeechToText } from '../hooks/useSpeechToText'
 import logoMaya from '../assets/logomaya-limpio.svg'
 
 export default function SpeechToText() {
-  const { status, transcript, interim, error, supported, toggle } =
+  const { status, transcript, interim, error, supported, aiResult, toggle, reset } =
     useSpeechToText()
 
   const listening = status === 'listening'
   const thinking = status === 'thinking'
   const hasText = transcript.length > 0 || interim.length > 0
-  const showPanel = listening || thinking || hasText || Boolean(error)
+  const showPanel = listening || thinking || hasText || Boolean(error) || Boolean(aiResult)
 
   const label = error
-    ? 'Dictado no disponible'
+    ? 'Dictation Error'
     : listening
-      ? 'Escuchando…'
+      ? 'Listening…'
       : thinking
-        ? 'Pensando…'
-        : 'Dictado'
+        ? 'Processing with AI…'
+        : aiResult
+          ? 'AI Interpretation'
+          : 'Voice Dictation'
 
   return (
     <div className="speech-dictation">
@@ -26,32 +28,69 @@ export default function SpeechToText() {
           role="status"
           aria-live="polite"
         >
-          <p className="speech-dictation__label">{label}</p>
+          <div className="speech-dictation__header">
+            <p className="speech-dictation__label">{label}</p>
+            {status === 'idle' && (
+              <button
+                type="button"
+                className="speech-dictation__close"
+                onClick={reset}
+                aria-label="Dismiss"
+                title="Dismiss"
+              >
+                ✕
+              </button>
+            )}
+          </div>
 
           {error ? (
             <p className="speech-dictation__error">{error}</p>
           ) : (
-            <p className="speech-dictation__text">
-              {transcript && <span>{transcript} </span>}
-              {interim && (
-                <span className="speech-dictation__interim">{interim}</span>
-              )}
-              {listening && hasText && (
-                <span className="speech-dictation__caret" aria-hidden="true" />
+            <>
+              {hasText && (
+                <p className="speech-dictation__text">
+                  {transcript && <span>{transcript} </span>}
+                  {interim && (
+                    <span className="speech-dictation__interim">{interim}</span>
+                  )}
+                  {listening && (
+                    <span className="speech-dictation__caret" aria-hidden="true" />
+                  )}
+                </p>
               )}
               {listening && !hasText && (
-                <span className="speech-dictation__placeholder">
-                  Habla ahora…
-                </span>
+                <p className="speech-dictation__text">
+                  <span className="speech-dictation__placeholder">
+                    Speak now…
+                  </span>
+                </p>
               )}
-            </p>
+            </>
           )}
 
           {thinking && (
-            <div className="speech-dictation__thinking" aria-hidden="true">
-              <span />
-              <span />
-              <span />
+            <div className="speech-dictation__thinking-container">
+              <div className="speech-dictation__thinking" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
+              <span className="speech-dictation__thinking-hint">Analyzing actions & options...</span>
+            </div>
+          )}
+
+          {aiResult && !thinking && (
+            <div className="speech-dictation__result">
+              <div className="speech-dictation__result-item">
+                <span className="speech-dictation__result-tag">Action</span>
+                <span className="speech-dictation__result-action">{aiResult.action}</span>
+              </div>
+              <div className="speech-dictation__result-options">
+                <span className="speech-dictation__result-tag">Options</span>
+                <pre className="speech-dictation__result-json">
+                  {JSON.stringify(aiResult.options, null, 2)}
+                </pre>
+              </div>
             </div>
           )}
         </div>
@@ -63,11 +102,11 @@ export default function SpeechToText() {
         onClick={toggle}
         disabled={!supported || thinking}
         aria-pressed={listening}
-        aria-label={listening ? 'Detener dictado por voz' : 'Dictar por voz'}
+        aria-label={listening ? 'Stop voice dictation' : 'Start voice dictation'}
         title={
           supported
-            ? 'Dictar por voz'
-            : 'Tu navegador no admite reconocimiento de voz'
+            ? 'Voice dictation'
+            : 'Your browser does not support speech recognition'
         }
       >
         {listening && <span className="speech-dictation__pulse" aria-hidden="true" />}

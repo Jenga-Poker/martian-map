@@ -524,13 +524,37 @@
   border-color: var(--peligro);
 }
 
+.speech-dictation__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+}
+
 .speech-dictation__label {
-  margin: 0 0 0.35rem;
+  margin: 0;
   font-family: var(--fuente-titulo);
   font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  color: var(--acento);
+}
+
+.speech-dictation__close {
+  background: transparent;
+  border: none;
+  color: var(--texto);
+  opacity: 0.6;
+  cursor: pointer;
+  padding: 0 0.2rem;
+  font-size: 0.75rem;
+  line-height: 1;
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.speech-dictation__close:hover {
+  opacity: 1;
   color: var(--acento);
 }
 
@@ -566,10 +590,78 @@
   animation: speech-caret 1s steps(2, start) infinite;
 }
 
+.speech-dictation__thinking-container {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--burnt-rose-2);
+}
+
+.speech-dictation__thinking-hint {
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--texto) 70%, transparent);
+  font-style: italic;
+}
+
 .speech-dictation__thinking {
   display: flex;
   gap: 0.3rem;
-  margin-top: 0.55rem;
+}
+
+.speech-dictation__result {
+  margin-top: 0.65rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--burnt-rose-2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.speech-dictation__result-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.speech-dictation__result-tag {
+  font-family: var(--fuente-titulo);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--acento);
+  background: var(--burnt-rose);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+.speech-dictation__result-action {
+  font-family: monospace;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--texto);
+}
+
+.speech-dictation__result-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.speech-dictation__result-json {
+  margin: 0;
+  padding: 0.5rem;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--burnt-rose-2);
+  color: var(--texto);
+  font-family: monospace;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  overflow-x: auto;
+  max-height: 140px;
 }
 
 .speech-dictation__thinking span {
