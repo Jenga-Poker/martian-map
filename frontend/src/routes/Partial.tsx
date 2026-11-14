@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router'
 import TerrainViewer, { type CameraMode } from './../components/TerrainViewer'
 import SidePanel from './../components/SidePanel'
 import Loading from './../components/Loading'
@@ -17,6 +18,7 @@ import './../App.css'
 const legendGradient = `linear-gradient(to top, ${MARS_PALETTE.join(', ')})`
 
 export default function Partial() {
+  const navigate = useNavigate()
   const [data, setData] = useState<TerrainData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [exaggeration, setExaggeration] = useState(3.5)
@@ -101,6 +103,7 @@ export default function Partial() {
           <SidePanel
             title="Control del terreno"
             open
+            onClose={() => navigate('/global')}
             className="side-panel--terrain"
             actionLabel="Centrar vista"
             onGo={() => setResetSignal((signal) => signal + 1)}
