@@ -5,7 +5,7 @@ def test_shortest_path_with_bundled_jezero_dem():
     start = (18.47, 77.40)
     end = (18.44, 77.44)  
 
-    result = pathfinding.shortest_path("jezero_dem_1m", start, end, 500.12)
+    result = pathfinding.shortest_path("jezero_dem_1m", start, end, max_height_diff=0.2, height_multiplier_1=1.0, height_multiplier_2=5.0, height_multiplier_3=50.0)
 
     print(result)
 

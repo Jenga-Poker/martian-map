@@ -1,38 +1,53 @@
 from __future__ import annotations
 
 import math
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
 
 import networkx as nx
 import numpy as np
-import rasterio
 from rasterio.crs import CRS
-from rasterio.transform import rowcol
+from rasterio.transform import Affine, rowcol
 from rasterio.warp import transform as warp_transform
 
 # Directorio de datos: <repo>/data
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
-HEIGHT_MULTIPLIERS = (1.0, 20.0, 500.0)
+HEIGHT_MULTIPLIERS = (500.0, 2000.0, 5000.0)
 
-def resolve_zone_file(zone: str) -> Path:
-    """Resuelve un nombre de zona a un archivo .tif dentro de data/."""
+def resolve_preprocessed_file(zone: str) -> Path:
+    """Localiza el raster binario preprocesado (.npz) dentro de data/."""
     safe_name = Path(zone).name
     if safe_name != zone or not safe_name:
         raise ValueError("Nombre de zona inválido.")
 
-    candidates = []
     if safe_name.lower().endswith(".tif"):
-        candidates.append(DATA_DIR / safe_name)
-    else:
-        candidates.append(DATA_DIR / f"{safe_name}.tif")
-        candidates.append(DATA_DIR / safe_name)
+        safe_name = safe_name[:-4]
+    elif safe_name.lower().endswith(".npz"):
+        safe_name = safe_name[:-4]
 
-    for path in candidates:
-        if path.is_file():
-            return path
+    path = DATA_DIR / f"{safe_name}.npz"
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"No existe el binario preprocesado: {path}. "
+            "Ejecuta primero preprocess_dem.py para generar el archivo .npz."
+        )
+    return path
 
-    raise FileNotFoundError(f"No se encontró el archivo de zona en data/: {zone}")
+
+@lru_cache(maxsize=4)
+def _load_preprocessed_dem(binary_path: str):
+    """Carga y mantiene en caché el DEM binario para reutilizarlo entre rutas."""
+    with np.load(binary_path, allow_pickle=False) as data:
+        dem = data["dem"].astype(np.float32, copy=False)
+        transform = Affine(*data["transform"].tolist())
+        crs_text = str(data["crs_wkt"].item())
+        nodata_value = float(data["nodata"].item())
+        bounds = tuple(float(v) for v in data["bounds"].tolist())
+
+    crs = CRS.from_wkt(crs_text) if crs_text else None
+    nodata = None if np.isnan(nodata_value) else nodata_value
+    return dem, transform, crs, nodata, bounds
 
 
 def _geographic_crs(crs: CRS | None) -> CRS | None:
@@ -192,18 +207,20 @@ def shortest_path(
     max_height_diff: float | None = None,
     progress=None,
     progress_interval: int = 50000,
-    sample_points: int | None = 250,
-    height_multipliers: Iterable[float] = HEIGHT_MULTIPLIERS,
+    sample_points: int | None = 350,
+    height_multiplier_1: float = 1.0,
+    height_multiplier_2: float = 5.0,
+    height_multiplier_3: float = 50.0,
 ) -> dict:
     """Calcula la ruta más corta entre dos coordenadas geográficas en un DEM.
 
-    Construye una grilla 8-conexa (cardinal y diagonal, submuestreada para usar
+    Lee exclusivamente un DEM binario .npz preprocesado y construye una grilla 8-conexa (cardinal y diagonal, submuestreada para usar
     solo un conjunto reducido de puntos), aplica restricciones de altura máxima
     entre nodos, y calcula la ruta con ``networkx.astar_path`` usando heurística
     euclídea admisible.
 
     Args:
-        zone: Nombre de zona/archivo dentro de data/ (con o sin .tif).
+        zone: Nombre de zona del binario .npz dentro de data/ (con o sin extensión).
         start: Coordenada de inicio [latitud, longitud] en grados.
         end: Coordenada de destino [latitud, longitud] en grados.
         max_height_diff: Diferencia máxima de altura permitida por celda del
@@ -214,28 +231,25 @@ def shortest_path(
         sample_points: Objetivo aproximado de puntos por lado de la grilla de
             búsqueda (p.ej. 250 => ~62k nodos máx. por ventana). ``None`` o <=0
             usa resolución completa (1 celda = 1 nodo).
-        height_multipliers: Tres (o más) multiplicadores para ponderar la
-            variación de altura. El grafo se construye una sola vez y se reutiliza.
+        height_multiplier_1: Primer multiplicador para ponderar la variación de altura.
+        height_multiplier_2: Segundo multiplicador para ponderar la variación de altura.
+        height_multiplier_3: Tercer multiplicador para ponderar la variación de altura.
+            El grafo se construye una sola vez y se reutiliza para los tres.
 
     Returns:
         Diccionario con la ruta y metadatos.
     """
-    dem_path = resolve_zone_file(zone)
+    dem_path = resolve_preprocessed_file(zone)
 
     start_geo = (float(start[0]), float(start[1]))
     end_geo = (float(end[0]), float(end[1]))
 
-    _report_progress(progress, f"[pathfinding] Zona: {dem_path.name}")
+    _report_progress(progress, f"[pathfinding] Binario preprocesado: {dem_path.name}")
     _report_progress(progress, f"[pathfinding] Coordenadas: inicio={start_geo}, fin={end_geo}")
 
-    with rasterio.open(dem_path) as src:
-        dem = src.read(1)
-        height, width = dem.shape
-        nodata = src.nodata
-        transform = src.transform
-        bounds = src.bounds
-        crs = src.crs
-        geographic_crs = _geographic_crs(crs)
+    dem, transform, crs, nodata, bounds = _load_preprocessed_dem(str(dem_path.resolve()))
+    height, width = dem.shape
+    geographic_crs = _geographic_crs(crs)
 
     def to_pixel(lat: float, lon: float) -> tuple[int, int]:
         # The API receives lat/lon degrees, but projected DEMs (such as the
@@ -263,7 +277,7 @@ def shortest_path(
         if not (0 <= r < height and 0 <= c < width):
             raise ValueError(
                 f"La coordenada {name} ({lat}, {lon}) está fuera del área del DEM "
-                f"(lat [{bounds.bottom}, {bounds.top}], lon [{bounds.left}, {bounds.right}])."
+                f"(extensión del raster: {bounds})."
             )
 
     dist = max(abs(end_pt[0] - start_pt[0]), abs(end_pt[1] - start_pt[1]))
@@ -310,11 +324,13 @@ def shortest_path(
         f"({grid_h * grid_w} nodos) desde ventana {sub_h}x{sub_w}",
     )
 
-    multipliers = tuple(float(value) for value in height_multipliers)
-    if len(multipliers) != 3:
-        raise ValueError("height_multipliers debe contener exactamente tres valores.")
+    multipliers = (
+        float(height_multiplier_1),
+        float(height_multiplier_2),
+        float(height_multiplier_3),
+    )
     if len(set(multipliers)) != 3:
-        raise ValueError("Los tres height_multipliers deben ser distintos.")
+        raise ValueError("Los tres height_multiplier deben ser distintos.")
     if any(value < 0 for value in multipliers):
         raise ValueError("Los height_multipliers no pueden ser negativos.")
 
