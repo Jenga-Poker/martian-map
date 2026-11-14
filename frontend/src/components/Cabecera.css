@@ -64,9 +64,10 @@
 
 .hud-reloj__etiqueta {
   font-size: 0.55rem;
-  font-weight: 600;
-  letter-spacing: 0.16em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
+  font-family: var(--fuente-titulo);
   color: var(--acento);
 }
 
@@ -79,7 +80,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
-  opacity: 0.85;
 }
 
 .hud-reloj__hora {

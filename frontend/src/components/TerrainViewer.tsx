@@ -140,7 +140,7 @@ export default function TerrainViewer({
     renderer.outputColorSpace = THREE.SRGBColorSpace
     renderer.toneMapping = THREE.ACESFilmicToneMapping
     renderer.toneMappingExposure = 1.18
-    renderer.setClearColor(0x000000, 0)
+    renderer.setClearColor(0x090202, 1)
     renderer.domElement.style.cursor = 'crosshair'
     mount.appendChild(renderer.domElement)
 
@@ -174,7 +174,7 @@ export default function TerrainViewer({
 
     const material = new THREE.MeshStandardMaterial({
       vertexColors: true,
-      alphaTest: 0.5,
+      alphaTest: 0,
       roughness: 0.94,
       metalness: 0.02,
       side: THREE.DoubleSide,
@@ -182,13 +182,13 @@ export default function TerrainViewer({
     const terrain = new THREE.Mesh(geometry, material)
     scene.add(terrain)
 
-    scene.add(new THREE.HemisphereLight(0xffc7a0, 0x1c0805, 1.1))
+    scene.add(new THREE.HemisphereLight(0xfef5eb, 0x090202, 1.1))
 
-    const sun = new THREE.DirectionalLight(0xffe2bd, 2.3)
+    const sun = new THREE.DirectionalLight(0xfef5eb, 2.3)
     sun.position.set(-widthKm * 0.75, widthKm * 1.25, -heightKm * 0.4)
     scene.add(sun)
 
-    const fill = new THREE.DirectionalLight(0xff8a52, 1.15)
+    const fill = new THREE.DirectionalLight(0xd56738, 1.15)
     fill.position.set(widthKm * 0.8, widthKm * 0.45, heightKm * 0.9)
     scene.add(fill)
 
@@ -211,22 +211,16 @@ export default function TerrainViewer({
       new THREE.BufferAttribute(starPositions, 3),
     )
     const starMaterial = new THREE.PointsMaterial({
-      color: 0xffd8c2,
+      color: 0xfef5eb,
       size: 0.55,
       sizeAttenuation: true,
-      transparent: true,
-      opacity: 0.65,
-      depthWrite: false,
     })
     const stars = new THREE.Points(starGeometry, starMaterial)
     scene.add(stars)
 
     const ringMaterial = new THREE.MeshBasicMaterial({
-      color: 0xe5c069,
-      transparent: true,
-      opacity: 0.95,
+      color: 0xec733c,
       side: THREE.DoubleSide,
-      depthWrite: false,
     })
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.23, 48), ringMaterial)
     ring.rotation.x = -Math.PI / 2

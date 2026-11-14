@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import TerrainViewer, { type CameraMode } from './../components/TerrainViewer'
 import SidePanel from './../components/SidePanel'
+import Loading from './../components/Loading'
+import Button from './../components/Button'
 import {
   MARS_PALETTE,
   formatCoord,
@@ -77,14 +79,10 @@ export default function Partial() {
       </div>
 
       {!data && !error && (
-        <div className="partial-loading">
-          <div className="partial-loader-orbit" aria-hidden="true">
-            <span className="partial-loader-planet" />
-            <span className="partial-loader-moon" />
-          </div>
-          <p className="partial-loading-title">Procesando el relieve de Marte</p>
-          <p className="partial-loading-sub">1024 × 1024 muestras del DEM · 1 m/px</p>
-        </div>
+        <Loading
+          title="Procesando el relieve de Marte"
+          subtitle="1024 × 1024 muestras del DEM · 1 m/px"
+        />
       )}
 
       {error && (
@@ -104,7 +102,8 @@ export default function Partial() {
             title="Control del terreno"
             open
             className="side-panel--terrain"
-            headerExtra={<span className="terrain-chip">DEM 1 m/px</span>}
+            actionLabel="Centrar vista"
+            onGo={() => setResetSignal((signal) => signal + 1)}
           >
             <section className="terrain-section">
               <div className="terrain-field">
@@ -124,22 +123,20 @@ export default function Partial() {
               </div>
 
               <div className="terrain-segmented" role="group" aria-label="Tipo de cámara">
-                <button
-                  type="button"
-                  className={cameraMode === 'perspective' ? 'is-active' : ''}
+                <Button
+                  active={cameraMode === 'perspective'}
                   aria-pressed={cameraMode === 'perspective'}
                   onClick={() => setCameraMode('perspective')}
                 >
                   Perspectiva
-                </button>
-                <button
-                  type="button"
-                  className={cameraMode === 'top' ? 'is-active' : ''}
+                </Button>
+                <Button
+                  active={cameraMode === 'top'}
                   aria-pressed={cameraMode === 'top'}
                   onClick={() => setCameraMode('top')}
                 >
                   Cenital
-                </button>
+                </Button>
               </div>
 
               <div className="terrain-toggles">
@@ -166,14 +163,6 @@ export default function Partial() {
                   <span>Malla del terreno</span>
                 </label>
               </div>
-
-              <button
-                type="button"
-                className="terrain-action"
-                onClick={() => setResetSignal((signal) => signal + 1)}
-              >
-                Centrar vista
-              </button>
 
               <p className="terrain-hint">
                 Arrastra para orbitar · rueda para acercar · clic derecho para desplazar
