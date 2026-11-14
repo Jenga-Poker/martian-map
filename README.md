@@ -38,3 +38,40 @@ bloques y escribe en `frontend/public/terrain/`:
 - Exageración vertical de 1× a 8×.
 - Cámara en perspectiva o cenital.
 - Rotación automática, malla de alambre y lectura de elevación/coordenadas.
+
+## Rutas entre dos coordenadas
+
+El panel derecho incluye la sección **Ruta entre puntos**. Introduce la
+latitud y longitud (en grados decimales) del inicio y del fin, y pulsa
+**Calcular ruta**. La ruta se calcula en un Web Worker con A* sobre el
+heightmap, penalizando las pendientes fuertes y el ascenso, y se dibuja sobre
+el relieve con marcadores de inicio (verde) y fin (naranja). Las estadísticas
+muestran distancia horizontal, longitud sobre el relieve, ascenso/descenso,
+pendiente máxima y cotas.
+
+### Importar JSON/CSV
+
+El botón **Importar JSON/CSV** acepta una lista de puntos y usa el primero y
+el último como extremos de la ruta. Se admiten, por ejemplo:
+
+```json
+[
+  [18.4415, 77.4555],
+  [18.4725, 77.4315]
+]
+```
+
+```json
+{ "start": [18.4415, 77.4555], "end": [18.4725, 77.4315] }
+```
+
+```csv
+lat,lon
+18.43210,77.45000
+18.47900,77.41400
+```
+
+También se aceptan objetos `{ "lat": 18.45, "lon": 77.44 }`, GeoJSON de tipo
+`Point`/`LineString` y pares en orden `lon,lat`: el visor detecta el orden
+comparando los valores con los límites del DEM.
+

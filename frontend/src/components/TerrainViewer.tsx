@@ -1,12 +1,18 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { MARS_PALETTE, type HoverInfo, type TerrainData } from '../terrain'
+import { Line2 } from 'three/addons/lines/Line2.js'
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js'
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js'
+import { MARS_PALETTE, type HoverInfo } from '../terrain'
+import type { RouteResult } from '../routing'
+import type { TerrainModel } from '../terrainModel'
 
 export type CameraMode = 'perspective' | 'top'
 
 type Props = {
-  data: TerrainData
+  model: TerrainModel
+  route: RouteResult | null
   exaggeration: number
   autoRotate: boolean
   wireframe: boolean
@@ -22,12 +28,15 @@ type SceneApi = {
   setWireframe: (value: boolean) => void
   applyCameraMode: (mode: CameraMode) => void
   reset: () => void
+  setRoute: () => void
 }
-
-type HeightSample = { elevation: number; y: number }
 
 const BASE_EXAGGERATION = 3.5
 const CAMERA_FOV = 42
+const ROUTE_OFFSET_KM = 0.025
+const ROUTE_COLOR = 0x8df2cc
+const START_COLOR = 0xa8f5d4
+const END_COLOR = 0xff8a4c
 
 const clamp01 = (value: number) => (value < 0 ? 0 : value > 1 ? 1 : value)
 
@@ -53,7 +62,8 @@ function easeInOutCubic(t: number): number {
 }
 
 export default function TerrainViewer({
-  data,
+  model,
+  route,
   exaggeration,
   autoRotate,
   wireframe,
@@ -66,6 +76,7 @@ export default function TerrainViewer({
   const apiRef = useRef<SceneApi | null>(null)
   const exaggerationRef = useRef(exaggeration)
   const cameraModeRef = useRef(cameraMode)
+  const routeRef = useRef(route)
   const onHoverRef = useRef(onHover)
   const onErrorRef = useRef(onError)
 
@@ -74,33 +85,17 @@ export default function TerrainViewer({
     onErrorRef.current = onError
     exaggerationRef.current = exaggeration
     cameraModeRef.current = cameraMode
+    routeRef.current = route
   })
 
   useEffect(() => {
     const mount = mountRef.current
     if (!mount) return
 
-    const { meta, heights } = data
-    const widthKm = meta.widthMeters / 1000
-    const heightKm = meta.heightMeters / 1000
-    const midElevation = (meta.minElevation + meta.maxElevation) / 2
-    const elevationSpan = meta.maxElevation - meta.minElevation || 1
-    const qToMeters = elevationSpan / (meta.nodata - 1)
+    const { meta, heights, widthKm, heightKm, qToMeters, baseHeights } = model
     const count = meta.width * meta.height
     const spacingX = widthKm / (meta.width - 1)
     const spacingZ = heightKm / (meta.height - 1)
-
-    // Altura relativa (km) de cada vértice, centrada en la elevación media.
-    const baseHeights = new Float32Array(count)
-    for (let i = 0; i < count; i += 1) {
-      const q = heights[i]
-      if (q === meta.nodata) {
-        baseHeights[i] = 0
-        continue
-      }
-      const elevation = meta.minElevation + q * qToMeters
-      baseHeights[i] = (elevation - midElevation) / 1000
-    }
 
     // Color por elevación + micro-sombreado del relieve.
     const colorArray = new Float32Array(count * 4)
@@ -128,8 +123,12 @@ export default function TerrainViewer({
         const right = col < meta.width - 1 ? heights[i + 1] : q
         const up = row > 0 ? heights[i - meta.width] : q
         const down = row < meta.height - 1 ? heights[i + meta.width] : q
-        const slopeX = (((right - left) * qToMeters) / (2 * spacingX * 1000)) * BASE_EXAGGERATION
-        const slopeZ = (((down - up) * qToMeters) / (2 * spacingZ * 1000)) * BASE_EXAGGERATION
+        const slopeX =
+          (((right - left) * qToMeters) / (2 * spacingX * 1000)) *
+          BASE_EXAGGERATION
+        const slopeZ =
+          (((down - up) * qToMeters) / (2 * spacingZ * 1000)) *
+          BASE_EXAGGERATION
         const invLength = 1 / Math.sqrt(slopeX * slopeX + 1 + slopeZ * slopeZ)
         const shade = (-slopeX * light.x + light.y - slopeZ * light.z) * invLength
         const lightFactor = 0.9 + 0.28 * Math.max(0, shade)
@@ -249,6 +248,125 @@ export default function TerrainViewer({
     ring.visible = false
     scene.add(ring)
 
+    // ---------- Ruta calculada ----------
+    const routeGroup = new THREE.Group()
+    scene.add(routeGroup)
+
+    const routeMaterial = new LineMaterial({
+      color: ROUTE_COLOR,
+      linewidth: 3,
+      worldUnits: false,
+      alphaToCoverage: true,
+      transparent: true,
+      opacity: 0.95,
+    })
+    routeMaterial.resolution.set(
+      Math.max(1, mount.clientWidth),
+      Math.max(1, mount.clientHeight),
+    )
+
+    const markerRadius = Math.max(
+      0.045,
+      Math.max(widthKm, heightKm) * 0.0032,
+    )
+    const markerGeometry = new THREE.SphereGeometry(1, 20, 14)
+    const markerRingGeometry = new THREE.RingGeometry(1.85, 2.45, 48)
+    const startMaterial = new THREE.MeshBasicMaterial({ color: START_COLOR })
+    const endMaterial = new THREE.MeshBasicMaterial({ color: END_COLOR })
+    const startRingMaterial = new THREE.MeshBasicMaterial({
+      color: START_COLOR,
+      transparent: true,
+      opacity: 0.6,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    })
+    const endRingMaterial = new THREE.MeshBasicMaterial({
+      color: END_COLOR,
+      transparent: true,
+      opacity: 0.6,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    })
+
+    const startMarker = new THREE.Mesh(markerGeometry, startMaterial)
+    const endMarker = new THREE.Mesh(markerGeometry, endMaterial)
+    const startRing = new THREE.Mesh(markerRingGeometry, startRingMaterial)
+    const endRing = new THREE.Mesh(markerRingGeometry, endRingMaterial)
+    for (const marker of [startMarker, endMarker]) {
+      marker.scale.setScalar(markerRadius)
+      marker.renderOrder = 3
+      marker.visible = false
+      routeGroup.add(marker)
+    }
+    for (const routeRing of [startRing, endRing]) {
+      routeRing.rotation.x = -Math.PI / 2
+      routeRing.scale.setScalar(markerRadius)
+      routeRing.renderOrder = 3
+      routeRing.visible = false
+      routeGroup.add(routeRing)
+    }
+
+    let routeLine: Line2 | null = null
+    let routeGeometry: LineGeometry | null = null
+
+    const clearRoute = () => {
+      if (routeLine) {
+        routeGroup.remove(routeLine)
+        routeLine = null
+      }
+      if (routeGeometry) {
+        routeGeometry.dispose()
+        routeGeometry = null
+      }
+      startMarker.visible = false
+      endMarker.visible = false
+      startRing.visible = false
+      endRing.visible = false
+    }
+
+    const applyRoute = () => {
+      clearRoute()
+      const current = routeRef.current
+      if (!current) return
+
+      const ex = exaggerationRef.current
+
+      const placeMarker = (
+        marker: THREE.Mesh,
+        markerRing: THREE.Mesh,
+        point: { x: number; z: number; elevation: number },
+      ) => {
+        const y = ((point.elevation - model.midElevation) / 1000) * ex
+        marker.position.set(point.x, y + markerRadius * 0.8, point.z)
+        marker.visible = true
+        markerRing.position.set(point.x, y + 0.02, point.z)
+        markerRing.visible = true
+      }
+
+      placeMarker(startMarker, startRing, current.start)
+      placeMarker(endMarker, endRing, current.end)
+
+      if (current.points.length < 2) return
+
+      const flat = new Float32Array(current.points.length * 3)
+      for (let i = 0; i < current.points.length; i += 1) {
+        const point = current.points[i]
+        flat[i * 3] = point.x
+        flat[i * 3 + 1] =
+          ((point.elevation - model.midElevation) / 1000) * ex + ROUTE_OFFSET_KM
+        flat[i * 3 + 2] = point.z
+      }
+
+      const lineGeometry = new LineGeometry()
+      lineGeometry.setPositions(flat)
+      const line = new Line2(lineGeometry, routeMaterial)
+      line.computeLineDistances()
+      line.renderOrder = 2
+      routeGroup.add(line)
+      routeLine = line
+      routeGeometry = lineGeometry
+    }
+
     const terrainBox = new THREE.Box3(
       new THREE.Vector3(-widthKm / 2 - 1, -12, -heightKm / 2 - 1),
       new THREE.Vector3(widthKm / 2 + 1, 12, heightKm / 2 + 1),
@@ -303,49 +421,6 @@ export default function TerrainViewer({
     }
     controls.addEventListener('start', cancelFlight)
 
-    // Muestreo bilineal del heightmap. Devuelve null fuera del DEM.
-    const sampleAt = (
-      x: number,
-      z: number,
-      exValue: number,
-      out: HeightSample,
-    ): HeightSample | null => {
-      if (x < -widthKm / 2 || x > widthKm / 2) return null
-      if (z < -heightKm / 2 || z > heightKm / 2) return null
-      const u = ((x + widthKm / 2) / widthKm) * (meta.width - 1)
-      const v = ((z + heightKm / 2) / heightKm) * (meta.height - 1)
-      const col0 = Math.floor(u)
-      const row0 = Math.floor(v)
-      const col1 = Math.min(col0 + 1, meta.width - 1)
-      const row1 = Math.min(row0 + 1, meta.height - 1)
-      const fx = u - col0
-      const fy = v - row0
-      const i00 = row0 * meta.width + col0
-      const i10 = row0 * meta.width + col1
-      const i01 = row1 * meta.width + col0
-      const i11 = row1 * meta.width + col1
-
-      if (
-        heights[i00] === meta.nodata ||
-        heights[i10] === meta.nodata ||
-        heights[i01] === meta.nodata ||
-        heights[i11] === meta.nodata
-      ) {
-        return null
-      }
-
-      const base =
-        (baseHeights[i00] * (1 - fx) + baseHeights[i10] * fx) * (1 - fy) +
-        (baseHeights[i01] * (1 - fx) + baseHeights[i11] * fx) * fy
-      const q =
-        (heights[i00] * (1 - fx) + heights[i10] * fx) * (1 - fy) +
-        (heights[i01] * (1 - fx) + heights[i11] * fx) * fy
-
-      out.elevation = meta.minElevation + q * qToMeters
-      out.y = base * exValue
-      return out
-    }
-
     const raycaster = new THREE.Raycaster()
     const pointer = new THREE.Vector2()
     const rayA = new THREE.Vector3()
@@ -384,7 +459,12 @@ export default function TerrainViewer({
       for (let step = 1; step <= steps; step += 1) {
         const t = tStart + (marchLength * step) / steps
         ray.at(t, rayC)
-        const current = sampleAt(rayC.x, rayC.z, exaggerationRef.current, sample)
+        const current = model.sampleAt(
+          rayC.x,
+          rayC.z,
+          exaggerationRef.current,
+          sample,
+        )
         if (current && rayC.y <= current.y) {
           let lo = previousT
           let hi = t
@@ -392,7 +472,7 @@ export default function TerrainViewer({
           for (let iteration = 0; iteration < 12; iteration += 1) {
             const midT = (lo + hi) / 2
             ray.at(midT, rayA)
-            const refined = sampleAt(
+            const refined = model.sampleAt(
               rayA.x,
               rayA.z,
               exaggerationRef.current,
@@ -407,14 +487,7 @@ export default function TerrainViewer({
           }
 
           ray.at(hi, hitPoint)
-          const u = ((hitPoint.x + widthKm / 2) / widthKm) * (meta.width - 1)
-          const v = ((hitPoint.z + heightKm / 2) / heightKm) * (meta.height - 1)
-          const lon =
-            meta.bounds.lonMin +
-            (u / (meta.width - 1)) * (meta.bounds.lonMax - meta.bounds.lonMin)
-          const lat =
-            meta.bounds.latMax -
-            (v / (meta.height - 1)) * (meta.bounds.latMax - meta.bounds.latMin)
+          const { lat, lon } = model.worldToGeo(hitPoint.x, hitPoint.z)
 
           ring.position.set(hitPoint.x, hit.y + 0.03, hitPoint.z)
           ring.visible = true
@@ -451,6 +524,7 @@ export default function TerrainViewer({
       renderer.setSize(width, height)
       camera.aspect = width / height
       camera.updateProjectionMatrix()
+      routeMaterial.resolution.set(width, height)
     }
     resize()
 
@@ -489,7 +563,23 @@ export default function TerrainViewer({
       reset: () => {
         moveCamera(cameraModeRef.current)
       },
+      setRoute: () => {
+        applyRoute()
+      },
     }
+
+    if (import.meta.env.DEV) {
+      ;(window as unknown as { __marsViewer?: unknown }).__marsViewer = {
+        renderer,
+        scene,
+        camera,
+        controls,
+        render: () => renderer.render(scene, camera),
+        applyRoute,
+      }
+    }
+
+    applyRoute()
 
     return () => {
       controls.removeEventListener('start', cancelFlight)
@@ -499,23 +589,39 @@ export default function TerrainViewer({
       observer.disconnect()
       renderer.setAnimationLoop(null)
       controls.dispose()
+      clearRoute()
       geometry.dispose()
       material.dispose()
       starGeometry.dispose()
       starMaterial.dispose()
       ring.geometry.dispose()
       ringMaterial.dispose()
+      markerGeometry.dispose()
+      markerRingGeometry.dispose()
+      startMaterial.dispose()
+      endMaterial.dispose()
+      startRingMaterial.dispose()
+      endRingMaterial.dispose()
+      routeMaterial.dispose()
       renderer.dispose()
       if (renderer.domElement.parentElement === mount) {
         mount.removeChild(renderer.domElement)
       }
+      if (import.meta.env.DEV) {
+        delete (window as unknown as { __marsViewer?: unknown }).__marsViewer
+      }
       apiRef.current = null
     }
-  }, [data])
+  }, [model])
 
   useEffect(() => {
     apiRef.current?.setExaggeration(exaggeration)
+    apiRef.current?.setRoute()
   }, [exaggeration])
+
+  useEffect(() => {
+    apiRef.current?.setRoute()
+  }, [route])
 
   useEffect(() => {
     apiRef.current?.setAutoRotate(autoRotate)
@@ -538,7 +644,7 @@ export default function TerrainViewer({
       className="stage"
       ref={mountRef}
       role="img"
-      aria-label="Modelo 3D del relieve del cráter Jezero"
+      aria-label="Modelo 3D del relieve del cráter Jezero con la ruta calculada"
     />
   )
 }
