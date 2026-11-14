@@ -1,30 +1,61 @@
 @font-face {
-  font-family: "Chillax";
-  src: url("./assets/fonts/Chillax-Variable.woff2") format("woff2");
-  font-weight: 200 700;
+  font-family: "Monument Extended";
+  src: url("./assets/fonts/PPMonumentExtended-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Monument Extended";
+  src: url("./assets/fonts/PPMonumentExtended-Black.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Space Mono";
+  src: url("./assets/fonts/SpaceMono-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Space Mono";
+  src: url("./assets/fonts/SpaceMono-Bold.ttf") format("truetype");
+  font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
 
 :root {
-  /* Paleta original */
-  --tangerine-dream: #ea9b7a;
-  --blushed-brick: #cb4f51;
-  --dusty-mauve: #ae4647;
-  --burnt-rose: #903c3c;
-  --espresso: #572a29;
-  --burnt-rose-2: #894c4a;
-  --terracotta-clay: #a66459;
-  --metallic-gold: #e5c069;
+  /* Paleta nueva */
+  --linen: #fef5eb;
+  --pitch-black: #090202;
+  --spicy-paprika: #d56738;
+  --atomic-tangerine: #ec733c;
 
-  /* Roles (esto es lo que usarás en los componentes) */
-  --fondo: var(--espresso);
-  --superficie: var(--burnt-rose-2);
-  --texto: var(--tangerine-dream);
-  --acento: var(--metallic-gold);
-  --peligro: var(--blushed-brick);
+  /* Roles */
+  --fondo: var(--pitch-black);
+  --superficie: #2a120b;
+  --texto: var(--linen);
+  --acento: var(--atomic-tangerine);
+  --peligro: var(--spicy-paprika);
 
-  --fuente: "Chillax", system-ui, sans-serif;
+  /* Compatibilidad con estilos existentes */
+  --espresso: var(--pitch-black);
+  --burnt-rose: #3a1710;
+  --burnt-rose-2: #5c2416;
+  --dusty-mauve: #8a3a22;
+  --blushed-brick: var(--spicy-paprika);
+  --terracotta-clay: #b8572f;
+  --tangerine-dream: var(--linen);
+  --metallic-gold: var(--atomic-tangerine);
+
+  --fuente: "Space Mono", ui-monospace, monospace;
+  --fuente-titulo: "Monument Extended", "Space Mono", sans-serif;
 }
 
 * {
@@ -33,14 +64,19 @@
 
 body {
   margin: 0;
-  background: transparent;
+  background: var(--fondo);
   color: var(--texto);
   font-family: var(--fuente);
   font-weight: 400;
 }
 
-h1, h2, h3 {
-  font-weight: 600;
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--fuente-titulo);
+  font-weight: 700;
+  text-transform: uppercase;
 }
-
-body { margin: 0; }

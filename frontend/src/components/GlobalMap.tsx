@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "re
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import "../App.css";
+import Loading from "./Loading";
 
 export type Poi = {
   id: string;
@@ -126,13 +127,13 @@ const GlobalMap = forwardRef<GlobalMapHandle, GlobalMapProps>(function GlobalMap
     const sun = new THREE.DirectionalLight(0xffffff, 1.25);
     sun.position.set(5, 3, 5);
     scene.add(sun);
-    const fill = new THREE.DirectionalLight(0xffe6cc, 0.25);
+    const fill = new THREE.DirectionalLight(0xfef5eb, 0.25);
     fill.position.set(-4, -2, -3);
     scene.add(fill);
 
     const globeGeo = new THREE.SphereGeometry(1, 96, 96);
     const globeMat = new THREE.MeshStandardMaterial({
-      color: 0xb8744f,
+      color: 0x8a3a22,
       roughness: 1,
       metalness: 0,
     });
@@ -165,7 +166,7 @@ const GlobalMap = forwardRef<GlobalMapHandle, GlobalMapProps>(function GlobalMap
       const pos = latLonToVector3(poi.lat, poi.lon, 1.015);
       const normal = pos.clone().normalize();
 
-      const markerMat = new THREE.MeshBasicMaterial({ color: 0xe5c069 });
+      const markerMat = new THREE.MeshBasicMaterial({ color: 0xec733c });
       const marker = new THREE.Mesh(markerGeo, markerMat);
       marker.position.copy(pos);
       marker.userData.poiId = poi.id;
@@ -173,10 +174,8 @@ const GlobalMap = forwardRef<GlobalMapHandle, GlobalMapProps>(function GlobalMap
       markers.push(marker);
 
       const haloMat = new THREE.MeshBasicMaterial({
-        color: 0xe5c069,
+        color: 0xec733c,
         side: THREE.DoubleSide,
-        transparent: true,
-        opacity: 0.9,
       });
       const halo = new THREE.Mesh(haloGeo, haloMat);
       halo.position.copy(normal.clone().multiplyScalar(1.018));
@@ -286,8 +285,6 @@ const GlobalMap = forwardRef<GlobalMapHandle, GlobalMapProps>(function GlobalMap
         if ((m as THREE.Mesh).geometry instanceof THREE.RingGeometry) {
           const s = 1 + Math.sin(t) * 0.08;
           m.scale.setScalar(s);
-          const mat = (m as THREE.Mesh).material as THREE.MeshBasicMaterial;
-          mat.opacity = 0.55 + Math.sin(t) * 0.25;
         }
       }
 
@@ -330,7 +327,7 @@ const GlobalMap = forwardRef<GlobalMapHandle, GlobalMapProps>(function GlobalMap
   return (
     <div className="mars-map">
       <div className="mars-canvas" ref={mountRef} />
-      {!ready && <div className="mars-loading" />}
+      {!ready && <Loading title="Cargando Marte" />}
     </div>
   );
 });
