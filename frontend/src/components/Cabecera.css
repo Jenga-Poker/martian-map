@@ -1,0 +1,82 @@
+/* Trapecio grande: lado largo arriba, pegado al borde superior */
+.trapecio-azul {
+  --alto: 70px;
+  --inclinacion: calc(var(--alto) * 0.75);
+
+  position: relative;
+  width: 30%;
+  margin: 0 auto;
+  height: var(--alto);
+  background: var(--burnt-rose);
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    calc(100% - var(--inclinacion)) 100%,
+    var(--inclinacion) 100%
+  );
+}
+
+/* Trapecio pequeño: menos alto, centrado, también con el lado largo arriba */
+.trapecio-blanco {
+  --alto: 55px;
+  --inclinacion: calc(var(--alto) * 0.75);
+
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  height: var(--alto);
+  background: var(--tangerine-dream);
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    calc(100% - var(--inclinacion)) 100%,
+    var(--inclinacion) 100%
+  );
+
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 0 60px;
+}
+
+.bloque {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  color: var(--burnt-rose);
+}
+
+.fecha {
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.hora {
+  font-size: 2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.icono {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  background: var(--burnt-rose);
+  -webkit-mask: center / contain no-repeat;
+  mask: center / contain no-repeat;
+}
+
+.icono-tierra {
+  -webkit-mask-image: url("../assets/icons/tierra.png");
+  mask-image: url("../assets/icons/tierra.png");
+}
+
+.icono-marte {
+  -webkit-mask-image: url("../assets/icons/marte.png");
+  mask-image: url("../assets/icons/marte.png");
+}
