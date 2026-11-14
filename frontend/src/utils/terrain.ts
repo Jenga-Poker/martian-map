@@ -30,15 +30,15 @@ export type HoverInfo = {
   lon: number
 }
 
-/** Paleta marciana de tonos óxido, de sombra a cima iluminada. */
+/** Paleta de elevación basada en los rojos de la app, de sombra a cima iluminada. */
 export const MARS_PALETTE = [
-  '#2b100a',
-  '#5a2013',
-  '#8d381c',
-  '#b45628',
-  '#d37945',
-  '#e8a878',
-  '#f7d3ad',
+  '#2a1414',
+  '#572a29',
+  '#903c3c',
+  '#ae4647',
+  '#cb4f51',
+  '#d96a6a',
+  '#e7a0a0',
 ]
 
 const numberFormat = new Intl.NumberFormat('es-ES', {

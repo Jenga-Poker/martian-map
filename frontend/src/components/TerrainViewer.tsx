@@ -222,7 +222,7 @@ export default function TerrainViewer({
     scene.add(stars)
 
     const ringMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffc79f,
+      color: 0xe5c069,
       transparent: true,
       opacity: 0.95,
       side: THREE.DoubleSide,

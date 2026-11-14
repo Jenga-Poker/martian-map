@@ -1,17 +1,29 @@
+import type { ReactNode } from "react";
 import arrowIcon from "../assets/arrow-back-outline.svg";
 
 type SidePanelProps = {
   title: string;
-  open: boolean;
+  open?: boolean;
   onGo?: () => void;
   onClose?: () => void;
+  children?: ReactNode;
+  className?: string;
+  headerExtra?: ReactNode;
 };
 
-export default function SidePanel({ title, open, onGo, onClose }: SidePanelProps) {
+export default function SidePanel({
+  title,
+  open = true,
+  onGo,
+  onClose,
+  children,
+  className = "",
+  headerExtra,
+}: SidePanelProps) {
   return (
     <aside
-      className={`side-panel${open ? " side-panel--open" : ""}`}
-      aria-label={title ? `Lugar seleccionado: ${title}` : "Panel lateral"}
+      className={`side-panel${open ? " side-panel--open" : ""}${className ? ` ${className}` : ""}`}
+      aria-label={title}
       aria-hidden={!open}
     >
       <div className="side-panel__header">
@@ -26,12 +38,16 @@ export default function SidePanel({ title, open, onGo, onClose }: SidePanelProps
           </button>
         )}
         <h2 className="side-panel__title">{title}</h2>
+        {headerExtra}
       </div>
-      <div className="side-panel__actions">
-        <button type="button" className="mars-forward" onClick={onGo}>
-          Ir
-        </button>
-      </div>
+      {children && <div className="side-panel__content">{children}</div>}
+      {onGo && (
+        <div className="side-panel__actions">
+          <button type="button" className="mars-forward" onClick={onGo}>
+            Ir
+          </button>
+        </div>
+      )}
     </aside>
   );
 }
