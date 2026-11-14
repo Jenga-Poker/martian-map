@@ -3,32 +3,32 @@
   "height": 1024,
   "nodata": 65535,
   "dtype": "uint16",
-  "minElevation": -2665.23,
-  "maxElevation": -1740.68,
-  "colorMin": -2645.99,
-  "colorMax": -2038.82,
-  "widthMeters": 16803.0,
-  "heightMeters": 17370.0,
+  "minElevation": -5741.03,
+  "maxElevation": 6820.04,
+  "colorMin": -4438.82,
+  "colorMax": 5012.44,
+  "widthMeters": 14820.0,
+  "heightMeters": 5929.0,
   "sourcePixelSizeMeters": 1.0,
-  "sourceWidth": 17783,
-  "sourceHeight": 17784,
+  "sourceWidth": 14820,
+  "sourceHeight": 5929,
   "sourceBoundsPx": {
     "x0": 0,
     "y0": 0,
-    "x1": 16803,
-    "y1": 17370
+    "x1": 14820,
+    "y1": 5929
   },
-  "validRatio": 0.772,
+  "validRatio": 0.9319,
   "bounds": {
-    "latMin": 18.30697,
-    "latMax": 18.60001,
-    "lonMin": 77.3,
-    "lonMax": 77.58347
+    "latMin": -0.10003,
+    "latMax": 0.0,
+    "lonMin": -0.00152,
+    "lonMax": 0.2485
   },
   "center": {
-    "lat": 18.45349,
-    "lon": 77.44174
+    "lat": -0.05001,
+    "lon": 0.12349
   },
   "crs": "Mars 2000 Sphere / Equirectangular",
-  "sourceFile": "jezero_dem_1m.tif"
+  "sourceFile": "valles_marineris_dem_200m.tif"
 }

@@ -27,8 +27,8 @@ MARS_SPHERE_RADIUS_M = 3_396_190.0
 DEG_PER_METER = 180.0 / (math.pi * MARS_SPHERE_RADIUS_M)
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SRC = ROOT / "data/jezero_dem_1m.tif"
-OUT_DIR = ROOT / "frontend" / "public" / "terrain"
+DEFAULT_SRC = ROOT / "gale_dem_1m.tif"
+OUT_DIR = ROOT / "frontend"
 
 
 def block_average(values: np.ndarray, valid: np.ndarray, out_size: int):
