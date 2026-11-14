@@ -28,7 +28,7 @@
 /* ---------- Encabezado ---------- */
 
 .header {
-  top: clamp(20px, 4vw, 42px);
+  top: clamp(60px, 4vw, 42px);
   left: clamp(20px, 4vw, 44px);
   max-width: 440px;
   animation: fade-up 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
@@ -37,8 +37,8 @@
 .eyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
-  font-size: 10.5px;
+  gap: 17px;
+  font-size: 20.5px;
   font-weight: 600;
   letter-spacing: 0.24em;
   text-transform: uppercase;
@@ -46,8 +46,8 @@
 }
 
 .eyebrow-dot {
-  width: 7px;
-  height: 7px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 0 4px rgba(255, 138, 76, 0.12), 0 0 16px var(--glow);
@@ -393,6 +393,40 @@ h1 {
     background 0.2s ease,
     transform 0.2s ease,
     border-color 0.2s ease;
+}
+
+.back-button {
+  width: 3%;
+  padding: 5px 5px;
+  margin: 15px 35px;
+  border-radius: 11px;
+  border: 1px solid var(--border-strong);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 138, 76, 0.2),
+    rgba(255, 138, 76, 0.06)
+  );
+  font-size: 17.5px;
+  font-weight: 600;
+  color: #ffd3b9;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.back-button:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 138, 76, 0.3),
+    rgba(255, 138, 76, 0.1)
+  );
+  border-color: rgba(255, 143, 96, 0.55);
+  transform: translateY(-1px);
+}
+
+.back-button:active {
+  transform: translateY(0);
 }
 
 .reset-button:hover {

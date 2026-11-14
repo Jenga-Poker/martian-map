@@ -44,7 +44,7 @@ export default function App() {
   const [data, setData] = useState<TerrainData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [exaggeration, setExaggeration] = useState(3.5)
-  const [autoRotate, setAutoRotate] = useState(true)
+  const [autoRotate, setAutoRotate] = useState(false)
   const [wireframe, setWireframe] = useState(false)
   const [cameraMode, setCameraMode] = useState<CameraMode>('perspective')
   const [resetSignal, setResetSignal] = useState(0)
@@ -255,17 +255,17 @@ export default function App() {
 
       {data && meta && (
         <>
+        <button
+              type="button"
+              className="back-button"
+              onClick={() => setResetSignal((signal) => signal + 1)}
+            >
+              ⤺
+            </button>
           <header className="hud header">
             <p className="eyebrow">
               <span className="eyebrow-dot" />
               Marte · Cráter Jezero
-            </p>
-            <h1>
-              Jezero <span className="title-accent">en relieve</span>
-            </h1>
-            <p className="lede">
-              Modelo digital de elevación del terreno marciano, reconstruido
-              píxel a píxel a partir del DEM de 1 metro.
             </p>
             <dl className="facts">
               <div>
