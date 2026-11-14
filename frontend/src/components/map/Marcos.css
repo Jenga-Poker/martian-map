@@ -1,0 +1,6 @@
+.marcos-blank {
+  position: fixed;
+  inset: 0;
+  background: purple;
+  z-index: 0;
+}

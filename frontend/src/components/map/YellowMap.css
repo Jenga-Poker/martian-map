@@ -1,6 +1,121 @@
-.yellow-map {
+.mars-map {
   position: fixed;
   inset: 0;
-  background: #f5d547;
-  z-index: -1;
+  z-index: 0;
+  background: radial-gradient(120% 120% at 70% 30%, #3b1f1e 0%, var(--fondo) 55%, #1a0e0d 100%);
+  color: var(--texto);
+  overflow: hidden;
+}
+
+.mars-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.mars-canvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+.mars-canvas canvas:active {
+  cursor: grabbing;
+}
+
+.mars-loading {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 0.6rem 1rem;
+  border: 1px solid rgba(229, 192, 105, 0.35);
+  border-radius: 999px;
+  background: rgba(87, 42, 41, 0.7);
+  color: var(--acento);
+  font-size: 0.9rem;
+  letter-spacing: 0.03em;
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+
+.mars-overlay {
+  position: absolute;
+  inset: 0;
+  padding: 2rem;
+  display: flex;
+  align-items: flex-end;
+  pointer-events: none;
+}
+
+.mars-overlay > * {
+  pointer-events: auto;
+}
+
+.mars-detail {
+  max-width: 320px;
+  padding: 1rem 1.1rem;
+  background: rgba(87, 42, 41, 0.72);
+  border: 1px solid rgba(229, 192, 105, 0.35);
+  border-radius: 14px;
+  backdrop-filter: blur(6px);
+}
+
+.mars-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.mars-detail h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--acento);
+}
+
+.mars-coords {
+  margin: 0.45rem 0 0;
+  font-variant-numeric: tabular-nums;
+  color: rgba(229, 192, 105, 0.85);
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+}
+
+.mars-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+}
+
+.mars-back,
+.mars-forward {
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid rgba(229, 192, 105, 0.45);
+  background: transparent;
+  color: var(--acento);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.mars-back:hover,
+.mars-forward:hover {
+  background: rgba(229, 192, 105, 0.15);
+}
+
+.mars-forward {
+  background: rgba(229, 192, 105, 0.12);
+}
+
+@media (max-width: 900px) {
+  .mars-overlay {
+    padding: 1.2rem;
+  }
+  .mars-detail {
+    max-width: none;
+    width: 100%;
+  }
 }
