@@ -42,7 +42,7 @@
   max-width: 320px;
   padding: 1rem 1.1rem;
   background: var(--superficie);
-  border: 1px solid var(--burnt-rose-2);
+  border: 2px solid var(--burnt-rose-2);
   border-radius: 14px;
 }
 
@@ -78,7 +78,7 @@
 
 .btn {
   padding: 0.45rem 0.8rem;
-  border: 1px solid var(--burnt-rose-2);
+  border: 2px solid var(--burnt-rose-2);
   border-radius: 10px;
   background: var(--superficie);
   color: var(--acento);
@@ -120,7 +120,7 @@
   padding: 1rem 1.1rem;
   overflow: auto;
   background: var(--espresso);
-  border: 1px solid var(--burnt-rose-2);
+  border: 2px solid var(--burnt-rose-2);
   border-left: none;
   border-radius: 0 14px 14px 0;
   transform: translateX(-100%);
@@ -217,7 +217,7 @@
   width: 18.5rem;
   max-height: none;
   height: auto;
-  border-left: 1px solid var(--burnt-rose-2);
+  border-left: 2px solid var(--burnt-rose-2);
   border-radius: 0 16px 16px 0;
   transform: translateX(0);
   pointer-events: auto;
@@ -236,7 +236,7 @@
 
 .terrain-chip {
   padding: 0.2rem 0.55rem;
-  border: 1px solid var(--burnt-rose-2);
+  border: 2px solid var(--burnt-rose-2);
   border-radius: 999px;
   font-size: 0.65rem;
   font-weight: 700;
@@ -313,7 +313,7 @@
   flex: none;
   width: 2.1rem;
   height: 1.15rem;
-  border: 1px solid var(--burnt-rose-2);
+  border: 2px solid var(--burnt-rose-2);
   border-radius: 999px;
   background: var(--superficie);
   transition: background 0.2s ease, border-color 0.2s ease;
@@ -357,7 +357,7 @@
   z-index: 5;
   max-width: 34rem;
   padding: 0.85rem 1rem;
-  border: 1px solid var(--burnt-rose-2);
+  border: 2px solid var(--burnt-rose-2);
   border-radius: 14px;
   background: var(--espresso);
 }
@@ -402,7 +402,7 @@
   z-index: 5;
   margin: 0;
   padding: 0.75rem 0.85rem;
-  border: 1px solid var(--burnt-rose-2);
+  border: 2px solid var(--burnt-rose-2);
   border-radius: 14px;
   background: var(--espresso);
 }
@@ -426,7 +426,7 @@
   width: 10px;
   height: 120px;
   border-radius: 999px;
-  border: 1px solid var(--burnt-rose-2);
+  border: 2px solid var(--burnt-rose-2);
 }
 
 .partial-legend__ticks {
@@ -448,7 +448,7 @@
   align-items: center;
   gap: 0.55rem;
   padding: 0.55rem 0.9rem;
-  border: 1px solid var(--burnt-rose-2);
+  border: 2px solid var(--burnt-rose-2);
   border-radius: 999px;
   background: var(--espresso);
   font-size: 0.78rem;
@@ -560,7 +560,7 @@
   width: min(28rem, calc(100vw - 2rem));
   height: fit-content;
   padding: 1.25rem;
-  border: 1px solid var(--peligro);
+  border: 2px solid var(--peligro);
   border-radius: 14px;
   background: var(--espresso);
 }
@@ -601,7 +601,7 @@
     bottom: 0.75rem;
     width: auto;
     max-height: 45vh;
-    border-left: 1px solid var(--burnt-rose-2);
+    border-left: 2px solid var(--burnt-rose-2);
     border-radius: 16px;
   }
 
