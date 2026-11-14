@@ -114,11 +114,12 @@
 }
 
 .side-panel {
+  --side-panel-width: 20rem;
   position: fixed;
   top: 6rem;
   left: 0;
   z-index: 30;
-  width: min(320px, calc(100vw - 1.5rem));
+  width: var(--side-panel-width);
   max-height: calc(100vh - 7rem);
   padding: 1rem 1.1rem;
   overflow: auto;
@@ -126,13 +127,50 @@
   border: 2px solid var(--burnt-rose-2);
   border-left: none;
   border-radius: 0 14px 14px 0;
-  transform: translateX(-100%);
+  transform: translateX(calc(-1 * var(--side-panel-width)));
   transition: transform 0.3s ease;
   pointer-events: none;
 }
 
 .side-panel--open {
   transform: translateX(0);
+  pointer-events: auto;
+}
+
+.partial-left-group {
+  --side-panel-width: 20rem;
+  position: fixed;
+  top: 1rem;
+  left: 0;
+  z-index: 30;
+  display: flex;
+  align-items: flex-start;
+  transform: translateX(calc(-1 * var(--side-panel-width)));
+  transition: transform 0.3s ease;
+  pointer-events: none;
+}
+
+.partial-left-group--open {
+  transform: translateX(0);
+}
+
+.partial-left-group .side-panel--terrain {
+  position: relative;
+  top: 0;
+  bottom: auto;
+  transform: none;
+  pointer-events: auto;
+  width: var(--side-panel-width);
+  height: auto;
+  min-height: 4rem;
+  margin: 0;
+  border-radius: 0 16px 16px 0;
+  flex: 0 0 var(--side-panel-width);
+}
+
+.partial-left-group .partial-header {
+  margin: 0;
+  margin-left: 1rem;
   pointer-events: auto;
 }
 
@@ -215,15 +253,14 @@
 }
 
 .side-panel--terrain {
+  --side-panel-width: 20rem;
   top: 1rem;
   bottom: 1rem;
-  width: 18.5rem;
+  width: var(--side-panel-width);
   max-height: none;
   height: auto;
   border-left: none;
   border-radius: 0 16px 16px 0;
-  transform: translateX(0);
-  pointer-events: auto;
   background: var(--espresso);
 }
 
@@ -353,16 +390,20 @@
 }
 
 .partial-header {
-  position: absolute;
-  top: 1rem;
-  left: 21rem;
-  right: 8rem;
+  position: relative;
+  top: 0;
+  left: auto;
+  right: auto;
   z-index: 5;
   max-width: 34rem;
   padding: 0.85rem 1rem;
   border: 2px solid var(--burnt-rose-2);
   border-radius: 14px;
   background: var(--espresso);
+}
+
+.partial-header--with-panel {
+  left: auto;
 }
 
 .partial-eyebrow {
