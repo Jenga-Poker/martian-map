@@ -4,7 +4,7 @@ import TerrainViewer, { type CameraMode } from './../components/TerrainViewer'
 import SidePanel from './../components/SidePanel'
 import Loading from './../components/Loading'
 import Button from './../components/Button'
-import SpeechToText from './../components/SpeechToText'
+import AIOverlay from './../components/AIOverlay'
 import { getPoi } from './../data/pois'
 import {
   MARS_PALETTE,
@@ -218,7 +218,7 @@ export default function Partial() {
         </>
       )}
 
-      <SpeechToText />
+      <AIOverlay />
     </main>
   )
 }
