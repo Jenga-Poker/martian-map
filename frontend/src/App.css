@@ -217,7 +217,7 @@
   width: 18.5rem;
   max-height: none;
   height: auto;
-  border-left: 2px solid var(--burnt-rose-2);
+  border-left: none;
   border-radius: 0 16px 16px 0;
   transform: translateX(0);
   pointer-events: auto;
@@ -779,7 +779,7 @@
     bottom: 0.75rem;
     width: auto;
     max-height: 45vh;
-    border-left: 2px solid var(--burnt-rose-2);
+    border-left: none;
     border-radius: 16px;
   }
 
