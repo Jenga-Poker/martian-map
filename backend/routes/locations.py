@@ -1,5 +1,4 @@
 import csv
-from pathlib import Path
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
@@ -8,10 +7,11 @@ from rasterio.transform import rowcol
 from rasterio.warp import transform as warp_transform
 
 from libs.pathfinding import _geographic_crs, _load_preprocessed_dem, resolve_preprocessed_file
+from config import DATA_DIR
 
 router = APIRouter(tags=["locations"])
 
-DATA_FILE = Path(__file__).resolve().parents[2] / "data" / "locations.csv"
+DATA_FILE = DATA_DIR / "locations.csv"
 
 
 def _clean(value: str) -> str:

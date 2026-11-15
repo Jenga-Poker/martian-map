@@ -11,8 +11,9 @@ from rasterio.crs import CRS
 from rasterio.transform import Affine, rowcol
 from rasterio.warp import transform as warp_transform
 
-# Directorio de datos: <repo>/data
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+from config import DATA_DIR
+
+# Directorio de datos: <repo>/data en local o /app/data dentro del contenedor.
 HEIGHT_MULTIPLIERS = (500.0, 2000.0, 5000.0)
 
 def resolve_preprocessed_file(zone: str) -> Path:

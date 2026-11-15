@@ -78,6 +78,8 @@ async def _extract_options(
     location_names = _load_zone_locations(zone)
     end_options = location_names + ["not_specified"]
 
+    print(location_names)
+
     rover_list = BACKEND_VEHICLES
     rover_ids = [rover["id"] for rover in rover_list]
     rover_options = rover_ids + ["not_specified"]

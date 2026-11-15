@@ -5,6 +5,31 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+_BACKEND_DIR = Path(__file__).resolve().parent
+
+
+def _resolve_data_dir() -> Path:
+    """Localiza el directorio data/ en local y dentro del contenedor.
+
+    - Local: el backend vive en <repo>/backend y los datos en <repo>/data.
+    - Docker: el backend vive en /app y los datos se montan en /app/data.
+    La variable de entorno DATA_DIR tiene prioridad si existe.
+    """
+    candidates: list[Path] = []
+    env_dir = os.getenv("DATA_DIR")
+    if env_dir:
+        candidates.append(Path(env_dir))
+    candidates.append(_BACKEND_DIR.parent / "data")  # local: <repo>/data
+    candidates.append(_BACKEND_DIR / "data")  # docker: /app/data
+
+    for candidate in candidates:
+        if candidate.is_dir():
+            return candidate
+    return candidates[0]
+
+
+DATA_DIR = _resolve_data_dir()
+
 # Compatibilidad: aceptar OLLAMA_URL o OLLAMA_HOST
 OLLAMA_MODEL = os.getenv("MODEL_OLLAMA") or "LUIS BERNAL"
 
@@ -22,32 +47,17 @@ ACTIONS = {
     }
 }
 
-LOCATIONS_FILE = Path(__file__).resolve().parents[1] / "data" / "locations.csv"
+LOCATIONS_FILE = DATA_DIR / "locations.csv"
 
 BACKEND_VEHICLES: list[dict[str, str]] = [
     {
-        "id": "sojourner",
-        "name": "Sojourner",
-        "description": "Mars Pathfinder rover (1997)",
+        "id": "vehicle-1",
+        "name": "Vehicle 1",
+        "description": "",
     },
     {
-        "id": "spirit",
-        "name": "Spirit",
-        "description": "MER-A rover (2004)",
-    },
-    {
-        "id": "opportunity",
-        "name": "Opportunity",
-        "description": "MER-B rover (2004)",
-    },
-    {
-        "id": "curiosity",
-        "name": "Curiosity",
-        "description": "MSL rover (2012)",
-    },
-    {
-        "id": "perseverance",
-        "name": "Perseverance",
-        "description": "Mars 2020 rover (2021)",
+        "id": "vehicle-2",
+        "name": "Vehicle 2",
+        "description": "",
     },
 ]
