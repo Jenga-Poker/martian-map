@@ -45,6 +45,8 @@ export function normalizeTerrainMeta(meta: TerrainMeta): TerrainMeta {
 export type TerrainData = {
   meta: TerrainMeta
   heights: Uint16Array
+  /** Capa opcional de rocosidad THEMIS: 0..254 = fracción, 255 = sin datos. */
+  rocky: Uint8Array | null
 }
 
 export type HoverInfo = {
@@ -79,14 +81,17 @@ export function formatCoord(value: number, positive: string, negative: string): 
 
 export async function loadTerrain(terrainDir: string): Promise<TerrainData> {
   const baseUrl = `/terrain/${encodeURIComponent(terrainDir)}`
-  const metaResponse = await fetch(`${baseUrl}/mars_height_meta.json`)
+  const [metaResponse, heightResponse, rockyResponse] = await Promise.all([
+    fetch(`${baseUrl}/mars_height_meta.json`),
+    fetch(`${baseUrl}/mars_height.bin`),
+    fetch(`${baseUrl}/rocky.bin`),
+  ])
   if (!metaResponse.ok) {
     throw new Error(`No se pudo cargar el metadata (${metaResponse.status})`)
   }
   const rawMeta = (await metaResponse.json()) as TerrainMeta
   const meta = normalizeTerrainMeta(rawMeta)
 
-  const heightResponse = await fetch(`${baseUrl}/mars_height.bin`)
   if (!heightResponse.ok) {
     throw new Error(`No se pudo cargar el heightmap (${heightResponse.status})`)
   }
@@ -95,5 +100,14 @@ export async function loadTerrain(terrainDir: string): Promise<TerrainData> {
   if (heights.length !== meta.width * meta.height) {
     throw new Error('El heightmap no coincide con las dimensiones del metadata')
   }
-  return { meta, heights }
+
+  let rocky: Uint8Array | null = null
+  if (rockyResponse.ok) {
+    const rockyBuffer = await rockyResponse.arrayBuffer()
+    if (rockyBuffer.byteLength === meta.width * meta.height) {
+      rocky = new Uint8Array(rockyBuffer)
+    }
+  }
+
+  return { meta, heights, rocky }
 }

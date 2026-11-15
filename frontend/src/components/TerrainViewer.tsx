@@ -51,6 +51,72 @@ const REFERENCE_ELEVATION_SPAN = 1000 // meters, used to keep vertical exaggerat
 
 const clamp01 = (value: number) => (value < 0 ? 0 : value > 1 ? 1 : value)
 
+const ROCKY_NODATA = 255
+
+/**
+ * Suaviza la capa de rocosidad con un desenfoque de caja separable para que
+ * los píxeles THEMIS no se aprecien como bloques sobre el terreno.
+ * Devuelve la fracción rocosa (0..1) o -1 en las celdas sin datos.
+ */
+function smoothRockyLayer(
+  raw: Uint8Array,
+  width: number,
+  height: number,
+  radius: number,
+): Float32Array {
+  const count = width * height
+  const horizontal = new Float32Array(count)
+  const horizontalWeight = new Float32Array(count)
+
+  for (let row = 0; row < height; row += 1) {
+    const rowStart = row * width
+    for (let col = 0; col < width; col += 1) {
+      const from = Math.max(0, col - radius)
+      const to = Math.min(width - 1, col + radius)
+      let sum = 0
+      let weight = 0
+      for (let c = from; c <= to; c += 1) {
+        const value = raw[rowStart + c]
+        if (value !== ROCKY_NODATA) {
+          sum += value
+          weight += 1
+        }
+      }
+      horizontal[rowStart + col] = sum
+      horizontalWeight[rowStart + col] = weight
+    }
+  }
+
+  const result = new Float32Array(count)
+  const maxFraction = ROCKY_NODATA - 1
+  for (let row = 0; row < height; row += 1) {
+    const from = Math.max(0, row - radius)
+    const to = Math.min(height - 1, row + radius)
+    for (let col = 0; col < width; col += 1) {
+      let sum = 0
+      let weight = 0
+      for (let r = from; r <= to; r += 1) {
+        const index = r * width + col
+        const w = horizontalWeight[index]
+        if (w > 0) {
+          sum += horizontal[index]
+          weight += w
+        }
+      }
+      result[row * width + col] = weight > 0 ? sum / weight / maxFraction : -1
+    }
+  }
+
+  return result
+}
+
+/** Ruido determinista por celda para repartir piedras sueltas. */
+function stoneHash(x: number, y: number): number {
+  let h = Math.imul(x, 374761393) + Math.imul(y, 668265263)
+  h = Math.imul(h ^ (h >>> 13), 1274126177)
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296
+}
+
 const palette = MARS_PALETTE.map((hex) => new THREE.Color(hex))
 
 function samplePalette(
@@ -127,6 +193,13 @@ export default function TerrainViewer({
     const color = { r: 0, g: 0, b: 0 }
     const light = new THREE.Vector3(-0.55, 0.78, 0.4).normalize()
     const colorRange = meta.colorMax - meta.colorMin || 1
+    const rocky = model.rocky
+      ? smoothRockyLayer(model.rocky, meta.width, meta.height, 4)
+      : null
+    // Gris calculado desde la luminancia: quita el color sin cambiar el brillo.
+    const ROCKY_ZONE_BLEND = 0.06
+    const ROCKY_STONE_BLEND = 0.84
+    const ROCKY_STONE_CELL = 3
 
     for (let row = 0; row < meta.height; row += 1) {
       for (let col = 0; col < meta.width; col += 1) {
@@ -156,6 +229,32 @@ export default function TerrainViewer({
         const invLength = 1 / Math.sqrt(slopeX * slopeX + 1 + slopeZ * slopeZ)
         const shade = (-slopeX * light.x + light.y - slopeZ * light.z) * invLength
         const lightFactor = 0.9 + 0.28 * Math.max(0, shade)
+
+        if (rocky) {
+          const zone = rocky[i]
+          if (zone > 0.015) {
+            const stoneX = Math.floor(col / ROCKY_STONE_CELL)
+            const stoneY = Math.floor(row / ROCKY_STONE_CELL)
+            const grain = stoneHash(stoneX, stoneY)
+            // Solo parte de las celdas forma una piedra reconocible.
+            const stone = clamp01((grain - 0.6) / 0.28)
+            // En zonas poco rocosas quedan menos piedras, pero igual de grises.
+            const gate = clamp01(zone * 3)
+            const stoneMask = stone * (0.4 + 0.6 * gate)
+            // Cada piedra tiene un gris propio, de oscuro a claro.
+            const shade = 0.7 + stoneHash(stoneX + 97, stoneY + 53) * 0.5
+            const luminance =
+              color.r * 0.299 + color.g * 0.587 + color.b * 0.114
+            const gray = luminance * shade
+            const blend =
+              zone * ROCKY_ZONE_BLEND + stoneMask * ROCKY_STONE_BLEND
+            if (blend > 0.003) {
+              color.r += (gray - color.r) * blend
+              color.g += (gray - color.g) * blend
+              color.b += (gray - color.b) * blend
+            }
+          }
+        }
 
         colorArray[offset] = color.r * lightFactor
         colorArray[offset + 1] = color.g * lightFactor

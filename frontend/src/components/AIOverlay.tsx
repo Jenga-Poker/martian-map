@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import logoMaya from '../assets/logomaya-limpio.svg'
 import { useSpeechToText } from '../hooks/useSpeechToText'
-import { ROVERS, getRover } from '../utils/rovy'
+import { getRover } from '../utils/rovy'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 

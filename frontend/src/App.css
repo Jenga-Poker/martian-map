@@ -486,6 +486,31 @@
   color: var(--tangerine-dream);
 }
 
+.partial-rocky {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.75rem 0 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-family: var(--fuente-titulo);
+  color: var(--texto);
+}
+
+.partial-rocky__swatch {
+  width: 1.6rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, #a8a198 60%, transparent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--espresso) 100%, transparent),
+    #a8a198
+  );
+}
+
 .partial-legend {
   position: absolute;
   top: 1rem;

@@ -1,0 +1,21 @@
+{
+  "width": 1024,
+  "height": 1024,
+  "dtype": "uint8",
+  "nodata": 255,
+  "rockyMin": 0,
+  "rockyMax": 254,
+  "sourceFile": "rocky_valles_marineris_themis_night.tif",
+  "sourceResolutionDegrees": [
+    0.0125,
+    0.0125
+  ],
+  "bounds": {
+    "lonMin": 269.9979249156874,
+    "lonMax": 320.002395625787,
+    "latMin": -20.00308732055788,
+    "latMax": 0.0020750843126080554
+  },
+  "coverage": 0.8008,
+  "rockyRatio": 0.3063
+}
