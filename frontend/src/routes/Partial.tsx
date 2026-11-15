@@ -17,7 +17,7 @@ import {
   getRouteLengthMeters,
   type RouteData,
 } from './../utils/pathy'
-import { DEFAULT_ROVER_ID, getRover } from './../utils/rovy'
+import { DEFAULT_ROVER_ID, ROVERS, getRover } from './../utils/rovy'
 import {
   formatCoord,
   formatMeters,
@@ -111,12 +111,16 @@ export default function Partial() {
   const [selectedRouteIndex, setSelectedRouteIndex] = useState<number | null>(null)
   const [selectedRoverId, setSelectedRoverId] = useState<string | null>(DEFAULT_ROVER_ID)
   const [routeData, setRouteData] = useState<RouteData[]>([])
+  const [routeDestination, setRouteDestination] = useState<string | null>(null)
+  const [routeStart, setRouteStart] = useState<AstronautPosition | null>(null)
   const selectedRover = useMemo(() => getRover(selectedRoverId), [selectedRoverId])
 
   useEffect(() => {
     setAstronaut(null)
     setRouteData([])
     setSelectedRouteIndex(null)
+    setRouteDestination(null)
+    setRouteStart(null)
   }, [poi.id])
 
   useEffect(() => {
@@ -286,6 +290,8 @@ export default function Partial() {
 
         setRouteData(routes)
         setSelectedRouteIndex(null)
+        setRouteDestination(destination.name)
+        setRouteStart({ ...astronaut })
         return {
           ok: true,
           message: `Ruta generada correctamente. ${routes.length} rutas calculadas.`,
@@ -418,27 +424,88 @@ export default function Partial() {
 
           <div className={`partial-left-group${panelOpen ? ' partial-left-group--open' : ''}`}>
             <SidePanel
-              title="Routes"
+              title="Panel"
               open={panelOpen}
               onBack={() => setPanelOpen(false)}
               className="side-panel--terrain"
             >
               <div style={{ display: 'grid', gap: '1rem' }}>
+                {astronaut && (
+                  <section>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--acento)', marginBottom: '0.25rem' }}>
+                      Posición seleccionada
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--texto)' }}>
+                      {formatCoord(astronaut.lat, 'N', 'S')} · {formatCoord(astronaut.lon, 'E', 'W')}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--texto)' }}>
+                      Elevación: {formatMeters(astronaut.elevation)}
+                    </div>
+                  </section>
+                )}
+
+                {routeData.length > 0 && (
+                  <section style={{ display: 'grid', gap: '0.6rem' }}>
+                    <div>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--acento)', textTransform: 'uppercase' }}>Inicio</div>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--texto)' }}>Your position</div>
+                      {routeStart && (
+                        <div style={{ fontSize: '0.72rem', color: 'var(--texto)' }}>
+                          {formatCoord(routeStart.lat, 'N', 'S')} · {formatCoord(routeStart.lon, 'E', 'W')}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--acento)', textTransform: 'uppercase' }}>Destino</div>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--texto)' }}>{routeDestination ?? '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--acento)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
+                        Vehículo
+                      </div>
+                      <div style={{ display: 'grid', gap: '0.35rem' }}>
+                        {ROVERS.map((rover) => {
+                          const active = rover.id === selectedRoverId
+                          return (
+                            <button
+                              key={rover.id}
+                              type="button"
+                              onClick={() => setSelectedRoverId(rover.id)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.5rem',
+                                width: '100%',
+                                padding: '0.3rem',
+                                borderRadius: '8px',
+                                border: `2px solid ${active ? 'var(--acento)' : 'var(--burnt-rose-2)'}`,
+                                background: active ? 'var(--burnt-rose)' : 'var(--superficie)',
+                                color: 'var(--texto)',
+                                cursor: 'pointer',
+                                textAlign: 'left',
+                                font: 'inherit',
+                              }}
+                            >
+                              <img src={rover.photo} alt={rover.name} style={{ width: '56px', height: '36px', objectFit: 'cover', borderRadius: '4px' }} />
+                              <span style={{ fontSize: '0.78rem' }}>{rover.name}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </section>
+                )}
+
                 {(() => {
                   if (routeData.length === 0) {
-                    return (
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: '0.82rem',
-                          lineHeight: 1.45,
-                          color: 'var(--texto)',
-                        }}
-                      >
-                        No routes yet. Place the astronaut on the terrain and
-                        use the voice assistant to calculate a route.
-                      </p>
-                    )
+                    if (!astronaut) {
+                      return (
+                        <p style={{ margin: 0, fontSize: '0.82rem', lineHeight: 1.45, color: 'var(--texto)' }}>
+                          Selecciona un punto en el mapa o usa el asistente de voz para calcular una ruta.
+                        </p>
+                      )
+                    }
+                    return null
                   }
 
                   const allHeights = routeData.flatMap((r) => r.heights ?? [])
