@@ -13,8 +13,13 @@ from rasterio.warp import transform as warp_transform
 
 from config import DATA_DIR
 
-# Directorio de datos: <repo>/data en local o /app/data dentro del contenedor.
-HEIGHT_MULTIPLIERS = (500.0, 2000.0, 5000.0)
+# Multiplicadores por defecto del coste de pendiente (pendiente^2).
+# 0    -> ruta más corta (solo distancia)
+# 100  -> ruta equilibrada
+# 1000 -> evita pendientes con fuerza: da el rodeo por las llanuras
+# Si 1000 aún no es suficientemente llano, prueba 3000 o 5000.
+HEIGHT_MULTIPLIERS = (0.0, 100.0, 1000.0)
+
 
 def resolve_preprocessed_file(zone: str) -> Path:
     """Localiza el raster binario preprocesado (.npz) dentro de data/."""
@@ -76,6 +81,22 @@ def _geographic_crs(crs: CRS | None) -> CRS | None:
     return CRS.from_dict(params)
 
 
+def _pixel_size_meters(transform: Affine, crs: CRS | None, ref_lat: float) -> float:
+    """Tamaño de píxel en metros (necesario para calcular pendientes reales)."""
+    size = abs(transform.a)
+    if crs is not None and crs.is_geographic:
+        # Grados -> metros aprox. (radio de Marte por defecto si el CRS lo indica).
+        radius = 3_389_500.0
+        try:
+            ellipsoid = crs.ellipsoid_params if hasattr(crs, "ellipsoid_params") else None
+            if ellipsoid and ellipsoid.get("a"):
+                radius = float(ellipsoid["a"])
+        except Exception:
+            pass
+        return size * math.radians(1.0) * radius * max(0.05, math.cos(math.radians(ref_lat)))
+    return size
+
+
 def _report_progress(progress, message: str) -> None:
     if progress is None:
         print(message, flush=True)
@@ -90,16 +111,22 @@ def _astar_grid(
     *,
     max_height_diff: float | None = None,
     cell_step: int = 1,
+    pixel_size: float = 1.0,
     progress=None,
     progress_interval: int = 50000,
     height_multipliers: Iterable[float] = HEIGHT_MULTIPLIERS,
 ) -> dict[float, tuple[list[tuple[int, int]], float]]:
     """A* sobre una grilla 8-conexa usando NetworkX.
 
-    Construye un grafo con las conexiones válidas (cardinales y diagonales),
-    respetando nodata y ``max_height_diff``, y ejecuta ``networkx.astar_path``
-    con heurística euclídea admisible. ``cell_step`` escala distancias/costes
-    cuando la grilla es una versión submuestreada del DEM original.
+    Coste de cada arista (en metros equivalentes):
+
+        coste = dist_m * (1 + multiplier * pendiente^2)
+
+    donde ``pendiente = desnivel / dist_m``. Al elevar la pendiente al cuadrado,
+    las zonas empinadas se penalizan mucho más que las suaves, de modo que un
+    multiplicador alto empuja la ruta hacia las llanuras aunque el camino sea
+    más largo. Como coste >= dist_m, la heurística euclídea (en metros) es
+    admisible.
     """
     rows, cols = dem.shape
     sr, sc = start
@@ -112,16 +139,18 @@ def _astar_grid(
     if not finite[sr, sc] or not finite[er, ec]:
         raise ValueError("Los puntos de inicio o destino no son válidos en el grafo.")
 
+    step_m = cell_step * pixel_size  # metros entre nodos vecinos cardinales
     total_cells = rows * cols
-    start_dist = math.hypot(er - sr, ec - sc) * cell_step
+    start_dist = math.hypot(er - sr, ec - sc) * step_m
     _report_progress(
         progress,
         f"[pathfinding] Construyendo grafo NetworkX: grilla={rows}x{cols} ({total_cells} nodos), "
-        f"paso={cell_step} celda(s), conectividad=8, distancia inicial={start_dist:.1f}, max_height_diff={max_height_diff}",
+        f"paso={cell_step} celda(s) = {step_m:.1f} m, conectividad=8, "
+        f"distancia inicial={start_dist:.1f} m, max_height_diff={max_height_diff}",
     )
 
     graph = nx.Graph()
-    # Forward directions cover all 8-neighborhood edges without duplicates.
+    # Direcciones "hacia delante": cubren las 8 vecindades sin duplicar aristas.
     directions = ((0, 1, 1.0), (1, 0, 1.0), (1, 1, math.sqrt(2.0)), (1, -1, math.sqrt(2.0)))
     for r in range(rows):
         for c in range(cols):
@@ -139,12 +168,16 @@ def _astar_grid(
                 height_diff = abs(h_v - h_u)
                 if max_height_diff is not None and height_diff > max_height_diff * cell_step:
                     continue
-                # Guardamos los componentes del coste por separado para poder
-                # reutilizar el mismo grafo con distintos height multipliers.
+
+                dist_m = dist_mul * step_m
+                slope = height_diff / dist_m
+                # Guardamos distancia y pendiente^2 por separado para reutilizar
+                # el mismo grafo con distintos multiplicadores.
                 graph.add_edge(
                     u,
                     (nr, nc),
-                    distance=dist_mul * cell_step,
+                    dist_m=dist_m,
+                    slope_sq=slope * slope,
                     height_diff=height_diff,
                 )
 
@@ -158,14 +191,14 @@ def _astar_grid(
     )
 
     def heuristic(u: tuple[int, int], v: tuple[int, int]) -> float:
-        return math.hypot(v[0] - u[0], v[1] - u[1]) * cell_step
+        return math.hypot(v[0] - u[0], v[1] - u[1]) * step_m
 
     results: dict[float, tuple[list[tuple[int, int]], float]] = {}
     for multiplier in height_multipliers:
         multiplier = float(multiplier)
 
         def edge_weight(u, v, data, factor=multiplier):
-            return data["distance"] + data["height_diff"] * factor
+            return data["dist_m"] * (1.0 + factor * data["slope_sq"])
 
         try:
             path = nx.astar_path(
@@ -184,9 +217,6 @@ def _astar_grid(
                 f"No se encontró una ruta válida para height_multiplier={multiplier}."
             ) from exc
 
-        # nx.path_weight solo acepta el nombre de un atributo, no una
-        # función de peso como nx.astar_path. Calculamos el coste con el
-        # mismo callback para mantener exactamente la misma ponderación.
         total_cost = float(sum(
             edge_weight(u, v, graph[u][v])
             for u, v in zip(path, path[1:])
@@ -208,37 +238,37 @@ def shortest_path(
     max_height_diff: float | None = None,
     progress=None,
     progress_interval: int = 50000,
-    sample_points: int | None = 350,
-    height_multiplier_1: float = 1.0,
-    height_multiplier_2: float = 5.0,
-    height_multiplier_3: float = 50.0,
-) -> dict:
-    """Calcula la ruta más corta entre dos coordenadas geográficas en un DEM.
+    sample_points: int | None = 500,
+    height_multiplier_1: float = HEIGHT_MULTIPLIERS[0],
+    height_multiplier_2: float = HEIGHT_MULTIPLIERS[1],
+    height_multiplier_3: float = HEIGHT_MULTIPLIERS[2],
+    min_margin: int = 300,
+    margin_factor: float = 1.0,
+) -> list[dict]:
+    """Calcula tres rutas entre dos coordenadas geográficas en un DEM.
 
-    Lee exclusivamente un DEM binario .npz preprocesado y construye una grilla 8-conexa (cardinal y diagonal, submuestreada para usar
-    solo un conjunto reducido de puntos), aplica restricciones de altura máxima
-    entre nodos, y calcula la ruta con ``networkx.astar_path`` usando heurística
-    euclídea admisible.
+    Lee un DEM binario .npz preprocesado, recorta una ventana de búsqueda
+    alrededor de inicio y destino, la submuestrea y ejecuta A* 8-conexo con
+    un coste de pendiente cuadrática (ver ``_astar_grid``).
 
     Args:
         zone: Nombre de zona del binario .npz dentro de data/ (con o sin extensión).
         start: Coordenada de inicio [latitud, longitud] en grados.
         end: Coordenada de destino [latitud, longitud] en grados.
-        max_height_diff: Diferencia máxima de altura permitida por celda del
-            DEM original; al usar submuestreo se escala por el paso entre nodos.
-        progress: Callback ``callable(str)`` para mensajes de progreso. Si es
-            ``None`` (por defecto), se imprime por stdout.
-        progress_interval: Conservado por compatibilidad (no aplica a A* de NetworkX).
-        sample_points: Objetivo aproximado de puntos por lado de la grilla de
-            búsqueda (p.ej. 250 => ~62k nodos máx. por ventana). ``None`` o <=0
-            usa resolución completa (1 celda = 1 nodo).
-        height_multiplier_1: Primer multiplicador para ponderar la variación de altura.
-        height_multiplier_2: Segundo multiplicador para ponderar la variación de altura.
-        height_multiplier_3: Tercer multiplicador para ponderar la variación de altura.
-            El grafo se construye una sola vez y se reutiliza para los tres.
+        max_height_diff: Desnivel máximo permitido por celda del DEM original;
+            con submuestreo se escala por el paso entre nodos.
+        progress: Callback ``callable(str)`` para mensajes de progreso.
+        progress_interval: Conservado por compatibilidad.
+        sample_points: Puntos aproximados por lado de la grilla de búsqueda.
+            ``None`` o <=0 usa resolución completa.
+        height_multiplier_1/2/3: Pesos de la pendiente^2. Valores altos evitan
+            pendientes y favorecen las llanuras. Deben ser distintos y >= 0.
+        min_margin: Margen mínimo (celdas) alrededor del rectángulo inicio-fin.
+        margin_factor: Margen proporcional a la distancia inicio-fin (en celdas).
+            Aumentarlo deja a A* explorar llanuras más alejadas.
 
     Returns:
-        Diccionario con la ruta y metadatos.
+        Lista de rutas, una por multiplicador.
     """
     dem_path = resolve_preprocessed_file(zone)
 
@@ -253,8 +283,7 @@ def shortest_path(
     geographic_crs = _geographic_crs(crs)
 
     def to_pixel(lat: float, lon: float) -> tuple[int, int]:
-        # The API receives lat/lon degrees, but projected DEMs (such as the
-        # bundled Jezero raster) use metres in their native CRS.
+        # La API recibe lat/lon en grados, pero los DEM proyectados usan metros.
         if crs is not None and crs.is_projected and geographic_crs is not None:
             xs, ys = warp_transform(geographic_crs, crs, [lon], [lat])
             x, y = float(xs[0]), float(ys[0])
@@ -281,8 +310,10 @@ def shortest_path(
                 f"(extensión del raster: {bounds})."
             )
 
+    # Ventana de búsqueda más amplia: sin margen suficiente, A* no puede llegar
+    # a las llanuras aunque el multiplicador las favorezca.
     dist = max(abs(end_pt[0] - start_pt[0]), abs(end_pt[1] - start_pt[1]))
-    margin = max(50, min(500, dist // 2))
+    margin = max(int(min_margin), int(dist * margin_factor))
 
     r0 = max(0, min(start_pt[0], end_pt[0]) - margin)
     r1 = min(height, max(start_pt[0], end_pt[0]) + margin + 1)
@@ -314,7 +345,7 @@ def shortest_path(
     grid_h, grid_w = grid_dem.shape
     local_start = (min(ls_r // stride, grid_h - 1), min(ls_c // stride, grid_w - 1))
     local_end = (min(le_r // stride, grid_h - 1), min(le_c // stride, grid_w - 1))
-    # Ensure exact endpoints are represented in the coarse grid.
+    # Aseguramos que los extremos exactos estén representados en la grilla gruesa.
     grid_dem = grid_dem.copy()
     grid_dem[local_start[0], local_start[1]] = sub_dem[ls_r, ls_c]
     grid_dem[local_end[0], local_end[1]] = sub_dem[le_r, le_c]
@@ -335,12 +366,16 @@ def shortest_path(
     if any(value < 0 for value in multipliers):
         raise ValueError("Los height_multipliers no pueden ser negativos.")
 
+    pixel_size = _pixel_size_meters(transform, crs, ref_lat=start_geo[0])
+    _report_progress(progress, f"[pathfinding] Tamaño de píxel: {pixel_size:.3f} m")
+
     local_results = _astar_grid(
         grid_dem,
         local_start,
         local_end,
         max_height_diff=max_height_diff,
         cell_step=stride,
+        pixel_size=pixel_size,
         progress=progress,
         progress_interval=progress_interval,
         height_multipliers=multipliers,

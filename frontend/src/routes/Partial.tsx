@@ -92,7 +92,7 @@ function getRouteLabel(route: RouteData, index: number): string {
   const multiplier = route.height_multiplier
   if (multiplier == null) return `Route ${index + 1}`
   if (multiplier <= 1) return 'Dangerous'
-  if (multiplier <= 5) return 'Medium'
+  if (multiplier <= 100) return 'Medium'
   return 'Slow'
 }
 
@@ -209,7 +209,7 @@ export default function Partial() {
             start: { lat: start.lat, lon: start.lon },
             end: { lat: end.lat, lon: end.lon },
             max_height_diff: maxHeightDiff,
-            multipliers: [1, 5, 50],
+            multipliers: [1, 50, 500],
           }),
         })
         if (!pathResponse.ok) return
@@ -366,7 +366,7 @@ export default function Partial() {
             start: { lat: astronaut.lat, lon: astronaut.lon },
             end: { lat: destination.lat, lon: destination.lon },
             max_height_diff: maxHeightDiff,
-            multipliers: [1, 5, 50],
+            multipliers: [1, 50, 500],
           }),
           signal,
         })
