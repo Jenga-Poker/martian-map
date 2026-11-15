@@ -455,6 +455,7 @@ export default function Partial() {
             onAstronautSelect={(position) => {
               setAstronaut(position)
             }}
+            locations={zoneLocations}
             routes={routePaths}
             routeColors={ROUTE_COLORS}
             selectedRouteIndex={selectedRouteIndex}

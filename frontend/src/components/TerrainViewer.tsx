@@ -13,6 +13,13 @@ export type AstronautPosition = {
   elevation: number
 }
 
+export type MapLocation = {
+  name: string
+  lat: number
+  lon: number
+  height?: number
+}
+
 type Props = {
   model: TerrainModel
   exaggeration: number
@@ -24,6 +31,7 @@ type Props = {
   onError: (message: string) => void
   astronaut: AstronautPosition | null
   onAstronautSelect?: (position: AstronautPosition) => void
+  locations?: MapLocation[]
   routes?: DemPixel[][]
   routeColors?: Array<number | string>
   selectedRouteIndex?: number | null
@@ -37,6 +45,7 @@ type SceneApi = {
   applyCameraMode: (mode: CameraMode) => void
   reset: () => void
   setAstronaut: (position: AstronautPosition | null) => void
+  setLocations: (locations: MapLocation[]) => void
   setRoutes: (
     routes: DemPixel[][],
     colors?: Array<number | string>,
@@ -83,6 +92,7 @@ export default function TerrainViewer({
   onError,
   astronaut,
   onAstronautSelect,
+  locations,
   routes,
   routeColors,
   selectedRouteIndex,
@@ -96,6 +106,7 @@ export default function TerrainViewer({
   const onErrorRef = useRef(onError)
   const onAstronautSelectRef = useRef(onAstronautSelect)
   const astronautRef = useRef(astronaut)
+  const locationsRef = useRef<MapLocation[]>(locations ?? [])
   const routesRef = useRef<DemPixel[][]>(routes ?? [])
   const routeColorsRef = useRef<Array<number | string> | undefined>(routeColors)
   const selectedRouteIndexRef = useRef<number | null>(selectedRouteIndex ?? null)
@@ -107,6 +118,7 @@ export default function TerrainViewer({
     cameraModeRef.current = cameraMode
     onAstronautSelectRef.current = onAstronautSelect
     astronautRef.current = astronaut
+    locationsRef.current = locations ?? []
     routesRef.current = routes ?? []
     routeColorsRef.current = routeColors
     selectedRouteIndexRef.current = selectedRouteIndex ?? null
@@ -280,6 +292,62 @@ export default function TerrainViewer({
     routeGroup.name = 'routes'
     scene.add(routeGroup)
 
+    const locationGroup = new THREE.Group()
+    locationGroup.name = 'locations'
+    scene.add(locationGroup)
+
+    const pinMaterial = new THREE.MeshStandardMaterial({
+      color: 0x38bdf8,
+      emissive: new THREE.Color(0x38bdf8),
+      emissiveIntensity: 0.55,
+      roughness: 0.4,
+      metalness: 0.1,
+    })
+    const pinHeadGeometry = new THREE.SphereGeometry(0.1, 18, 14)
+    const pinConeGeometry = new THREE.ConeGeometry(0.085, 0.4, 18)
+    const pinBaseGeometry = new THREE.RingGeometry(0.12, 0.18, 28)
+    const pinBaseMaterial = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      side: THREE.DoubleSide,
+    })
+    const pinSample = { elevation: 0, y: 0 }
+    let locationPins: THREE.Group[] = []
+
+    const updateLocationPins = (list: MapLocation[]) => {
+      while (locationGroup.children.length > 0) {
+        locationGroup.remove(locationGroup.children[0])
+      }
+      locationPins = []
+      for (const location of list) {
+        const { x, z } = model.geoToWorld(location)
+        const sampled = model.sampleAt(
+          x,
+          z,
+          effectiveExaggeration(exaggerationRef.current),
+          pinSample,
+        )
+        if (!sampled) continue
+
+        const pin = new THREE.Group()
+        pin.position.set(x, sampled.y, z)
+
+        const cone = new THREE.Mesh(pinConeGeometry, pinMaterial)
+        cone.rotation.x = Math.PI
+        cone.position.y = 0.2
+
+        const head = new THREE.Mesh(pinHeadGeometry, pinMaterial)
+        head.position.y = 0.42
+
+        const base = new THREE.Mesh(pinBaseGeometry, pinBaseMaterial)
+        base.rotation.x = -Math.PI / 2
+        base.position.y = 0.02
+
+        pin.add(base, cone, head)
+        locationGroup.add(pin)
+        locationPins.push(pin)
+      }
+    }
+
     const defaultRouteColors = [0xff0000, 0xffff00, 0x00ff00, 0x38bdf8, 0xe879f9]
     const drawRoutes = (
       paths: DemPixel[][],
@@ -365,6 +433,7 @@ export default function TerrainViewer({
       marker.visible = true
     }
     updateMarker(astronautRef.current)
+    updateLocationPins(locationsRef.current)
     drawRoutes(routesRef.current, routeColorsRef.current)
 
     const boxPad = Math.max(1, maxDimension * 0.02)
@@ -566,6 +635,8 @@ export default function TerrainViewer({
       const distance = camera.position.distanceTo(controls.target)
       ring.scale.setScalar(Math.max(0.55, distance / 34))
       marker.scale.setScalar(Math.max(0.6, distance / 28))
+      const pinScale = Math.max(0.6, distance / 28)
+      for (const pin of locationPins) pin.scale.setScalar(pinScale)
       renderer.render(scene, camera)
     })
 
@@ -574,6 +645,7 @@ export default function TerrainViewer({
         exaggerationRef.current = value
         terrain.scale.y = effectiveExaggeration(value) / initialExaggeration
         updateMarker(astronautRef.current)
+        updateLocationPins(locationsRef.current)
         drawRoutes(routesRef.current, routeColorsRef.current, selectedRouteIndexRef.current)
       },
       setAutoRotate: (value: boolean) => {
@@ -591,6 +663,10 @@ export default function TerrainViewer({
       setAstronaut: (position: AstronautPosition | null) => {
         astronautRef.current = position
         updateMarker(position)
+      },
+      setLocations: (nextLocations: MapLocation[]) => {
+        locationsRef.current = nextLocations
+        updateLocationPins(nextLocations)
       },
       setRoutes: (
         paths: DemPixel[][],
@@ -638,6 +714,14 @@ export default function TerrainViewer({
       markerBase.geometry.dispose()
       markerMat.dispose()
       ;(markerBase.material as THREE.Material).dispose()
+      while (locationGroup.children.length > 0) {
+        locationGroup.remove(locationGroup.children[0])
+      }
+      pinHeadGeometry.dispose()
+      pinConeGeometry.dispose()
+      pinBaseGeometry.dispose()
+      pinMaterial.dispose()
+      pinBaseMaterial.dispose()
       while (routeGroup.children.length > 0) {
         const child = routeGroup.children[0]
         routeGroup.remove(child)
@@ -676,6 +760,10 @@ export default function TerrainViewer({
   useEffect(() => {
     apiRef.current?.setAstronaut(astronaut)
   }, [astronaut])
+
+  useEffect(() => {
+    apiRef.current?.setLocations(locations ?? [])
+  }, [locations])
 
   useEffect(() => {
     apiRef.current?.setRoutes(routes ?? [], routeColors, selectedRouteIndex ?? null)
