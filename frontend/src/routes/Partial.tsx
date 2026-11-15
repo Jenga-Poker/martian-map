@@ -118,6 +118,7 @@ export default function Partial() {
   const [routeEnd, setRouteEnd] = useState<{ name: string; lat: number; lon: number } | null>(null)
   const [routeChosen, setRouteChosen] = useState(false)
   const [focusTarget, setFocusTarget] = useState<{ lat: number; lon: number } | null>(null)
+  const [zoneLocations, setZoneLocations] = useState<Location[]>([])
   const selectedRover = useMemo(() => getRover(selectedRoverId), [selectedRoverId])
 
   useEffect(() => {
@@ -128,6 +129,27 @@ export default function Partial() {
     setRouteData([])
     setRouteDestination(null)
     setRouteStart(null)
+    setZoneLocations([])
+  }, [poi.id])
+
+  useEffect(() => {
+    let cancelled = false
+    const loadLocations = async () => {
+      try {
+        const response = await fetch(`${API_URL}/locations/${encodeURIComponent(poi.id)}`)
+        if (!response.ok) return
+        const payload = (await response.json()) as { locations?: Location[] }
+        if (!cancelled && Array.isArray(payload.locations)) {
+          setZoneLocations(payload.locations)
+        }
+      } catch {
+        // ignore
+      }
+    }
+    void loadLocations()
+    return () => {
+      cancelled = true
+    }
   }, [poi.id])
 
   useEffect(() => {
@@ -162,8 +184,12 @@ export default function Partial() {
     [routeData],
   )
   const recalculateRoutes = useCallback(
-    async (rover: ReturnType<typeof getRover>) => {
-      if (!data || !model || !routeStart || !routeEnd || !rover) return
+    async (
+      rover: ReturnType<typeof getRover>,
+      start: AstronautPosition | null = routeStart,
+      end: { name: string; lat: number; lon: number } | null = routeEnd,
+    ) => {
+      if (!data || !model || !start || !end || !rover) return
       try {
         const pixelSize =
           typeof data.meta.sourcePixelSizeMeters === 'number'
@@ -181,8 +207,8 @@ export default function Partial() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             zone: pathZone,
-            start: { lat: routeStart.lat, lon: routeStart.lon },
-            end: { lat: routeEnd.lat, lon: routeEnd.lon },
+            start: { lat: start.lat, lon: start.lon },
+            end: { lat: end.lat, lon: end.lon },
             max_height_diff: maxHeightDiff,
             multipliers: [1, 5, 50],
           }),
@@ -198,6 +224,21 @@ export default function Partial() {
       }
     },
     [data, model, routeStart, routeEnd, poi.id],
+  )
+
+  const handleDestinationChange = useCallback(
+    (name: string) => {
+      const destination = zoneLocations.find((location) => location.name === name)
+      if (!destination) return
+      const newEnd = { name: destination.name, lat: destination.lat, lon: destination.lon }
+      const start = routeStart ?? astronaut
+      setRouteEnd(newEnd)
+      setRouteDestination(destination.name)
+      if (start) {
+        void recalculateRoutes(selectedRover, start, newEnd)
+      }
+    },
+    [zoneLocations, routeStart, astronaut, recalculateRoutes, selectedRover],
   )
 
   useEffect(() => {
@@ -513,8 +554,33 @@ export default function Partial() {
                       )}
                     </div>
                     <div>
-                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--acento)', textTransform: 'uppercase' }}>Destino</div>
-                      <div style={{ fontSize: '0.82rem', color: 'var(--texto)' }}>{routeDestination ?? '—'}</div>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--acento)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Destino</div>
+                      {routeChosen || zoneLocations.length === 0 ? (
+                        <div style={{ fontSize: '0.82rem', color: 'var(--texto)' }}>{routeDestination ?? '—'}</div>
+                      ) : (
+                        <select
+                          value={routeEnd?.name ?? routeDestination ?? ''}
+                          onChange={(e) => handleDestinationChange(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '0.45rem 0.5rem',
+                            borderRadius: '8px',
+                            border: '2px solid var(--burnt-rose-2)',
+                            background: 'var(--superficie)',
+                            color: 'var(--texto)',
+                            font: 'inherit',
+                          }}
+                        >
+                          {routeEnd && !zoneLocations.some((location) => location.name === routeEnd.name) && (
+                            <option value={routeEnd.name}>{routeEnd.name}</option>
+                          )}
+                          {zoneLocations.map((location) => (
+                            <option key={location.name} value={location.name}>
+                              {location.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                     {!routeChosen && (
                       <div>
