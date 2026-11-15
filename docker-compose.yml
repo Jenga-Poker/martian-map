@@ -26,6 +26,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
+      - ./backend:/app
       - ./scripts:/app/scripts:ro
       - ./data:/app/data
     environment:

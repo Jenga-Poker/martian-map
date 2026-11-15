@@ -44,7 +44,10 @@ OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY")
 ACTIONS = {
     "navigate_to": {
         "description": "Calculates the shortest path from the user's location to another point.",
-    }
+    },
+    "add_location": {
+        "description": "Adds, creates, marks or saves a new location.",
+    },
 }
 
 LOCATIONS_FILE = DATA_DIR / "locations.csv"

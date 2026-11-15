@@ -76,6 +76,7 @@ class LocationCreate(BaseModel):
     zone: str = Field(..., min_length=1, description="Zona/DEM del que obtener la altura")
 
 
+@router.post("/location")
 @router.post("/locations")
 async def create_location(request: LocationCreate):
     """Obtiene la altura desde el DEM de la zona para las coordenadas dadas y guarda el punto en data/locations.csv."""
@@ -126,12 +127,20 @@ async def create_location(request: LocationCreate):
 
     try:
         DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+        # Ensure the file ends with a newline if it exists and has content
+        if DATA_FILE.exists() and DATA_FILE.stat().st_size > 0:
+            with DATA_FILE.open("rb+") as f:
+                f.seek(-1, 2)
+                last_char = f.read(1)
+                if last_char != b"\n":
+                    f.write(b"\n")
+
         file_exists = DATA_FILE.exists() and DATA_FILE.stat().st_size > 0
         with DATA_FILE.open("a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f, delimiter=";")
             if not file_exists:
                 writer.writerow(["NAME", "LAT", "LON", "HEIGHT", "ZONE"])
-            writer.writerow([f'"{name}"', request.lat, request.lon, round(height_value, 4), f'"{zone}"'])
+            writer.writerow([name, request.lat, request.lon, round(height_value, 4), zone])
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Error al guardar la ubicación: {exc}") from exc
 

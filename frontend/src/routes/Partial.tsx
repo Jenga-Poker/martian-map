@@ -15,6 +15,7 @@ import { getPoi } from './../data/pois'
 import {
   getRouteDurationSeconds,
   getRouteLengthMeters,
+  parseResultExample,
   type RouteData,
 } from './../utils/pathy'
 import { DEFAULT_ROVER_ID, ROVERS, getRover } from './../utils/rovy'
@@ -118,6 +119,11 @@ export default function Partial() {
   const [routeChosen, setRouteChosen] = useState(false)
   const [focusTarget, setFocusTarget] = useState<{ lat: number; lon: number } | null>(null)
   const [zoneLocations, setZoneLocations] = useState<Location[]>([])
+  const [isAddLocationModalOpen, setIsAddLocationModalOpen] = useState(false)
+  const [pendingLocationPos, setPendingLocationPos] = useState<{ lat: number; lon: number } | null>(null)
+  const [newLocationName, setNewLocationName] = useState('')
+  const [isSavingLocation, setIsSavingLocation] = useState(false)
+  const [saveLocationError, setSaveLocationError] = useState<string | null>(null)
   const selectedRover = useMemo(() => getRover(selectedRoverId), [selectedRoverId])
 
   useEffect(() => {
@@ -129,6 +135,19 @@ export default function Partial() {
     setRouteDestination(null)
     setRouteStart(null)
     setZoneLocations([])
+  }, [poi.id])
+
+  const refreshLocations = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_URL}/locations/${encodeURIComponent(poi.id)}`)
+      if (!response.ok) return
+      const payload = (await response.json()) as { locations?: Location[] }
+      if (Array.isArray(payload.locations)) {
+        setZoneLocations(payload.locations)
+      }
+    } catch {
+      // ignore
+    }
   }, [poi.id])
 
   useEffect(() => {
@@ -248,6 +267,53 @@ export default function Partial() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRoverId])
 
+  const handleCreateLocation = useCallback(
+    async (e?: React.FormEvent) => {
+      if (e) e.preventDefault()
+      const trimmedName = newLocationName.trim()
+      if (!trimmedName) {
+        setSaveLocationError('El nombre no puede estar vacío.')
+        return
+      }
+      if (!pendingLocationPos) {
+        setSaveLocationError('No hay coordenadas seleccionadas.')
+        return
+      }
+
+      setIsSavingLocation(true)
+      setSaveLocationError(null)
+
+      try {
+        const response = await fetch(`${API_URL}/location`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: trimmedName,
+            lat: pendingLocationPos.lat,
+            lon: pendingLocationPos.lon,
+            zone: poi.id,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(await readError(response))
+        }
+
+        setIsAddLocationModalOpen(false)
+        setNewLocationName('')
+        setPendingLocationPos(null)
+        await refreshLocations()
+      } catch (err) {
+        setSaveLocationError(
+          err instanceof Error ? err.message : 'Error al guardar la ubicación.',
+        )
+      } finally {
+        setIsSavingLocation(false)
+      }
+    },
+    [newLocationName, pendingLocationPos, poi.id, refreshLocations],
+  )
+
   const executeAIAction = useCallback(
     async (
       ai: AIResult,
@@ -260,10 +326,46 @@ export default function Partial() {
         action.includes('route') ||
         action.includes('ruta')
 
+      const isAddLocationAction =
+        action === 'add_location' ||
+        action.includes('add_location') ||
+        action.includes('location') ||
+        action.includes('ubicacion')
+
+      if (isAddLocationAction) {
+        if (!data || !model) {
+          return { ok: false, message: 'El terreno aún no está cargado.' }
+        }
+
+        const targetPos = hover
+          ? { lat: hover.lat, lon: hover.lon }
+          : astronaut
+            ? { lat: astronaut.lat, lon: astronaut.lon }
+            : null
+
+        if (!targetPos) {
+          return {
+            ok: false,
+            message:
+              'Mueve el cursor sobre el terreno para seleccionar la posición de la nueva ubicación.',
+          }
+        }
+
+        setPendingLocationPos(targetPos)
+        setNewLocationName('')
+        setSaveLocationError(null)
+        setIsAddLocationModalOpen(true)
+
+        return {
+          ok: true,
+          message: 'Introduce el nombre de la ubicación en el modal.',
+        }
+      }
+
       if (!isPathAction) {
         return {
           ok: true,
-          message: 'La IA no ha solicitado calcular una ruta.',
+          message: 'Acción no reconocida.',
         }
       }
 
@@ -409,7 +511,7 @@ export default function Partial() {
         }
       }
     },
-    [astronaut, data, model, poi.id, poi.name, selectedRover],
+    [astronaut, data, hover, model, poi.id, poi.name, selectedRover],
   )
 
   const formatDuration = (seconds: number): string => {
@@ -458,6 +560,7 @@ export default function Partial() {
             routeColors={ROUTE_COLORS}
             selectedRouteIndex={selectedRouteIndex}
             focusTarget={focusTarget}
+            pins={zoneLocations}
           />
         )}
       </div>
@@ -537,9 +640,6 @@ export default function Partial() {
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--texto)' }}>
                       Elevación: {formatMeters(astronaut.elevation)}
-                    </div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--texto)', opacity: 0.75 }}>
-                      Haz clic en el terreno para moverlo
                     </div>
                   </section>
                 )}
@@ -830,12 +930,6 @@ export default function Partial() {
                   </dd>
                 </div>
               </dl>
-              {model?.rocky && (
-                <p className="partial-rocky">
-                  <span className="partial-rocky__swatch" aria-hidden="true" />
-                  Terreno rocoso · THEMIS
-                </p>
-              )}
             </header>
           </div>
 
@@ -864,6 +958,151 @@ export default function Partial() {
       )}
 
       <AIOverlay zone={poi.id} onAction={executeAIAction} />
+
+      {isAddLocationModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-location-title"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(4px)',
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isSavingLocation) {
+              setIsAddLocationModalOpen(false)
+            }
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--espresso)',
+              border: '2px solid var(--burnt-rose-2)',
+              borderRadius: '16px',
+              padding: '1.5rem',
+              width: '90%',
+              maxWidth: '420px',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem',
+            }}
+          >
+            <h2
+              id="add-location-title"
+              style={{
+                margin: 0,
+                fontSize: '1.1rem',
+                color: 'var(--acento)',
+                fontFamily: 'var(--fuente-titulo)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
+              Add New Location
+            </h2>
+
+            {pendingLocationPos && (
+              <div
+                style={{
+                  fontSize: '0.8rem',
+                  color: 'var(--texto)',
+                  background: 'var(--superficie)',
+                  padding: '0.6rem 0.8rem',
+                  borderRadius: '8px',
+                  border: '1px solid var(--burnt-rose-2)',
+                }}
+              >
+                <div>
+                  <strong>Coordinates:</strong>{' '}
+                  {formatCoord(pendingLocationPos.lat, 'N', 'S')} ·{' '}
+                  {formatCoord(pendingLocationPos.lon, 'E', 'W')}
+                </div>
+                <div style={{ marginTop: '0.2rem', color: 'var(--acento)' }}>
+                  Zone: {poi.name}
+                </div>
+              </div>
+            )}
+
+            <form
+              onSubmit={handleCreateLocation}
+              style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
+            >
+              <div>
+                <label
+                  htmlFor="location-name-input"
+                  style={{
+                    display: 'block',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    color: 'var(--texto)',
+                    marginBottom: '0.4rem',
+                  }}
+                >
+                  Location Name
+                </label>
+                <input
+                  id="location-name-input"
+                  type="text"
+                  autoFocus
+                  required
+                  value={newLocationName}
+                  onChange={(e) => setNewLocationName(e.target.value)}
+                  placeholder="e.g. Olympus Station"
+                  disabled={isSavingLocation}
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    padding: '0.6rem 0.8rem',
+                    borderRadius: '8px',
+                    border: '2px solid var(--burnt-rose-2)',
+                    background: 'var(--superficie)',
+                    color: 'var(--texto)',
+                    font: 'inherit',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+
+              {saveLocationError && (
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '0.78rem',
+                    color: '#ff6b6b',
+                  }}
+                >
+                  {saveLocationError}
+                </p>
+              )}
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setIsAddLocationModalOpen(false)}
+                  disabled={isSavingLocation}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn--active"
+                  disabled={isSavingLocation || !newLocationName.trim()}
+                >
+                  {isSavingLocation ? 'Saving…' : 'Save Location'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

@@ -35,6 +35,7 @@ const ACTION_LABELS: Record<string, string> = {
   navigate_to: 'Calcular ruta',
   find_path: 'Buscar ruta',
   calculate_route: 'Calcular ruta',
+  add_location: 'Añadir ubicación',
 }
 
 const OPTION_LABELS: Record<string, string> = {
@@ -164,14 +165,11 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
           action.includes('route') ||
           action.includes('ruta')
 
-        if (!isPathAction) {
-          setActionResult({
-            ok: true,
-            message: 'La IA no ha solicitado calcular una ruta.',
-          })
-          setOverlayState('done')
-          return
-        }
+        const isAddLocationAction =
+          action === 'add_location' ||
+          action.includes('add_location') ||
+          action.includes('location') ||
+          action.includes('ubicacion')
 
         if (!onAction) {
           setActionResult({
@@ -179,6 +177,15 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
             message: 'No hay un manejador de acciones disponible.',
           })
           setOverlayState('error')
+          return
+        }
+
+        if (!isPathAction && !isAddLocationAction) {
+          setActionResult({
+            ok: true,
+            message: 'Acción completada.',
+          })
+          setOverlayState('done')
           return
         }
 
@@ -334,7 +341,7 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
               <div
                 className={`ai-overlay__step ${actionResult.ok ? 'is-done' : 'is-error'}`}
               >
-                <div className="ai-overlay__step-title">Ruta</div>
+                <div className="ai-overlay__step-title">Resultado</div>
                 <div className="ai-overlay__step-body">
                   <p className="ai-overlay__confirm">
                     {actionResult.ok ? '✓ ' : '✕ '}
