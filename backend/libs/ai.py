@@ -25,24 +25,47 @@ ACTIONS = {
     }
 }
 
-ROVER_OPTIONS = ["rover 1", "rover 2", "not_specified"]
 LOCATIONS_FILE = Path(__file__).resolve().parents[2] / "data" / "locations.csv"
+
+# Rovers disponibles almacenados en el backend.
+BACKEND_ROVERS: list[dict[str, str]] = [
+    {
+        "id": "sojourner",
+        "name": "Sojourner",
+        "description": "Mars Pathfinder rover (1997)",
+    },
+    {
+        "id": "spirit",
+        "name": "Spirit",
+        "description": "MER-A rover (2004)",
+    },
+    {
+        "id": "opportunity",
+        "name": "Opportunity",
+        "description": "MER-B rover (2004)",
+    },
+    {
+        "id": "curiosity",
+        "name": "Curiosity",
+        "description": "MSL rover (2012)",
+    },
+    {
+        "id": "perseverance",
+        "name": "Perseverance",
+        "description": "Mars 2020 rover (2021)",
+    },
+]
 
 
 def _clean(value: str) -> str:
     return (value or "").strip().strip('"')
 
 
-def _normalize_rovers(
-    rovers: list[dict[str, Any]] | None,
-) -> list[dict[str, str]]:
-    """Normaliza los rovers enviados por el cliente y mantiene un fallback."""
+def _get_rovers() -> list[dict[str, str]]:
+    """Devuelve los rovers disponibles desde el backend."""
     normalized: list[dict[str, str]] = []
     seen: set[str] = set()
-
-    for rover in rovers or []:
-        if not isinstance(rover, dict):
-            continue
+    for rover in BACKEND_ROVERS:
         rover_id = _clean(str(rover.get("id", "")))
         if not rover_id or rover_id in seen:
             continue
@@ -54,19 +77,7 @@ def _normalize_rovers(
                 "description": _clean(str(rover.get("description", ""))),
             }
         )
-
-    if normalized:
-        return normalized
-
-    return [
-        {
-            "id": option,
-            "name": option.replace("_", " ").title(),
-            "description": "",
-        }
-        for option in ROVER_OPTIONS
-        if option != "not_specified"
-    ]
+    return normalized
 
 
 def _load_zone_locations(zone: str | None) -> list[str]:
@@ -152,7 +163,6 @@ async def _extract_options(
     action: str,
     instruction: str,
     zone: str | None = None,
-    rovers: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     if action != "navigate_to":
         return {}
@@ -160,7 +170,7 @@ async def _extract_options(
     location_names = _load_zone_locations(zone)
     end_options = location_names + ["not_specified"]
 
-    rover_list = _normalize_rovers(rovers)
+    rover_list = _get_rovers()
     rover_ids = [rover["id"] for rover in rover_list]
     rover_options = rover_ids + ["not_specified"]
     rover_criteria = {
@@ -234,13 +244,10 @@ async def _extract_options(
 async def interpret_instruction(
     instruction: str,
     zone: str | None = None,
-    rovers: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Interpreta una instrucción en dos pasos: identificar acción y extraer parámetros."""
     action = await _select_action(instruction)
-    options = await _extract_options(
-        action, instruction, zone=zone, rovers=rovers
-    )
+    options = await _extract_options(action, instruction, zone=zone)
     print("RESULT", action, options)
     return {"action": action, "options": options}
 

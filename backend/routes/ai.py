@@ -6,16 +6,9 @@ from libs.ai import interpret_instruction
 router = APIRouter(tags=["ai"])
 
 
-class RoverOption(BaseModel):
-    id: str
-    name: str
-    description: str | None = None
-
-
 class AIRequest(BaseModel):
     instruction: str
     zone: str | None = None
-    rovers: list[RoverOption] | None = None
 
 
 @router.post("/ai")
@@ -26,14 +19,7 @@ async def ai_endpoint(request: AIRequest):
 
     try:
         zone = request.zone.strip() if isinstance(request.zone, str) else None
-        rovers = (
-            [rover.model_dump() for rover in request.rovers]
-            if request.rovers
-            else None
-        )
-        result = await interpret_instruction(
-            request.instruction, zone=zone or None, rovers=rovers
-        )
+        result = await interpret_instruction(request.instruction, zone=zone or None)
         return result
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

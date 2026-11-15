@@ -139,11 +139,6 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
           body: JSON.stringify({
             instruction,
             zone,
-            rovers: ROVERS.map(({ id, name, description }) => ({
-              id,
-              name,
-              description,
-            })),
           }),
           signal: controller.signal,
         })
