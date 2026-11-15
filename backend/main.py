@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from routes.ai import router as ai_router
+from routes.distance_lantejuela import router as distance_lantejuela_router
 from routes.locations import router as locations_router
 from routes.path import router as path_router
 
@@ -21,6 +22,7 @@ app.add_middleware(
 )
 
 app.include_router(ai_router)
+app.include_router(distance_lantejuela_router)
 app.include_router(locations_router)
 app.include_router(path_router)
 
