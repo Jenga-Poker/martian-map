@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from pathlib import Path
+
 from routes.ai import router as ai_router
 from routes.distance_lantejuela import router as distance_lantejuela_router
 from routes.locations import router as locations_router
@@ -26,8 +28,11 @@ app.include_router(distance_lantejuela_router)
 app.include_router(locations_router)
 app.include_router(path_router)
 
+DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR.mkdir(exist_ok=True)
+
 try:
-    with open("../data/locations.csv", "x") as file:
+    with open(DATA_DIR /"locations.csv", "x") as file:
         file.write("NAME;LAT;LON;HEIGHT;ZONE\n\"Curiosity Rover\";4.79;137.39;0;\"gale\"\n\"Perseverance Rover\";18.447;77.402;0;\"jezero\"")
 except FileExistsError:
     print("File already exists. Skipping creation.")
