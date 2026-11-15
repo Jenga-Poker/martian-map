@@ -220,6 +220,9 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* Partial / Terrain viewer */
@@ -259,6 +262,8 @@
   width: var(--side-panel-width);
   max-height: none;
   height: auto;
+  display: flex;
+  flex-direction: column;
   border-left: none;
   border-radius: 0 16px 16px 0;
   background: var(--espresso);

@@ -15,6 +15,7 @@ import { getPoi } from './../data/pois'
 import {
   getRouteDurationSeconds,
   getRouteLengthMeters,
+  parseResultExample,
   type RouteData,
 } from './../utils/pathy'
 import { DEFAULT_ROVER_ID, ROVERS, getRover } from './../utils/rovy'
@@ -26,6 +27,7 @@ import {
   type TerrainData,
 } from './../utils/terrain'
 import { createTerrainModel } from './../utils/terrainModel'
+import { demPixelToGeo } from './../utils/pathy'
 import './../App.css'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
@@ -113,14 +115,26 @@ export default function Partial() {
   const [routeData, setRouteData] = useState<RouteData[]>([])
   const [routeDestination, setRouteDestination] = useState<string | null>(null)
   const [routeStart, setRouteStart] = useState<AstronautPosition | null>(null)
+  const [routeEnd, setRouteEnd] = useState<{ name: string; lat: number; lon: number } | null>(null)
+  const [routeChosen, setRouteChosen] = useState(false)
+  const [focusTarget, setFocusTarget] = useState<{ lat: number; lon: number } | null>(null)
   const selectedRover = useMemo(() => getRover(selectedRoverId), [selectedRoverId])
 
   useEffect(() => {
     setAstronaut(null)
-    setRouteData([])
     setSelectedRouteIndex(null)
-    setRouteDestination(null)
-    setRouteStart(null)
+    setRouteChosen(false)
+    setRouteEnd(null)
+    try {
+      const premade = parseResultExample()
+      setRouteData(premade)
+      setRouteDestination('Example route')
+      setRouteStart(null)
+    } catch {
+      setRouteData([])
+      setRouteDestination(null)
+      setRouteStart(null)
+    }
   }, [poi.id])
 
   useEffect(() => {
@@ -154,6 +168,53 @@ export default function Partial() {
     () => routeData.map((route) => route.path),
     [routeData],
   )
+  const recalculateRoutes = useCallback(
+    async (rover: ReturnType<typeof getRover>) => {
+      if (!data || !model || !routeStart || !routeEnd || !rover) return
+      try {
+        const pixelSize =
+          typeof data.meta.sourcePixelSizeMeters === 'number'
+            ? data.meta.sourcePixelSizeMeters
+            : data.meta.sourcePixelSizeMeters?.x
+        const maxHeightDiff =
+          pixelSize != null && Number.isFinite(pixelSize) && pixelSize > 0
+            ? rover.maxHeightDiffPerMeter * pixelSize
+            : rover.maxHeightDiffPerMeter
+        const pathSource =
+          (data.meta.sourceFile || poi.id).split(/[\\/]/).pop() ?? poi.id
+        const pathZone = pathSource.replace(/\.tiff?$/i, '')
+        const pathResponse = await fetch(`${API_URL}/path`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            zone: pathZone,
+            start: { lat: routeStart.lat, lon: routeStart.lon },
+            end: { lat: routeEnd.lat, lon: routeEnd.lon },
+            max_height_diff: maxHeightDiff,
+            multipliers: [1, 5, 50],
+          }),
+        })
+        if (!pathResponse.ok) return
+        const routes = normalizeRoutes(await pathResponse.json())
+        if (routes.length === 0) return
+        setRouteData(routes)
+        setSelectedRouteIndex(null)
+        setRouteChosen(false)
+      } catch {
+        // ignore
+      }
+    },
+    [data, model, routeStart, routeEnd, poi.id],
+  )
+
+  useEffect(() => {
+    const rover = getRover(selectedRoverId)
+    if (rover && routeEnd && routeStart) {
+      void recalculateRoutes(rover)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRoverId])
+
   const executeAIAction = useCallback(
     async (
       ai: AIResult,
@@ -290,8 +351,10 @@ export default function Partial() {
 
         setRouteData(routes)
         setSelectedRouteIndex(null)
+        setRouteChosen(false)
         setRouteDestination(destination.name)
         setRouteStart({ ...astronaut })
+        setRouteEnd({ name: destination.name, lat: destination.lat, lon: destination.lon })
         return {
           ok: true,
           message: `Ruta generada correctamente. ${routes.length} rutas calculadas.`,
@@ -361,6 +424,7 @@ export default function Partial() {
             routes={routePaths}
             routeColors={ROUTE_COLORS}
             selectedRouteIndex={selectedRouteIndex}
+            focusTarget={focusTarget}
           />
         )}
       </div>
@@ -392,7 +456,7 @@ export default function Partial() {
             style={{
               position: 'absolute',
               right: '1rem',
-              top: '25%',
+              top: '1rem',
               zIndex: 10,
               width: '3rem',
               height: '3rem',
@@ -459,40 +523,32 @@ export default function Partial() {
                       <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--acento)', textTransform: 'uppercase' }}>Destino</div>
                       <div style={{ fontSize: '0.82rem', color: 'var(--texto)' }}>{routeDestination ?? '—'}</div>
                     </div>
-                    <div>
-                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--acento)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
-                        Vehículo
+                    {!routeChosen && (
+                      <div>
+                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--acento)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
+                          Vehículo
+                        </div>
+                        <select
+                          value={selectedRoverId ?? ''}
+                          onChange={(e) => setSelectedRoverId(e.target.value || null)}
+                          style={{
+                            width: '100%',
+                            padding: '0.45rem 0.5rem',
+                            borderRadius: '8px',
+                            border: '2px solid var(--burnt-rose-2)',
+                            background: 'var(--superficie)',
+                            color: 'var(--texto)',
+                            font: 'inherit',
+                          }}
+                        >
+                          {ROVERS.map((rover) => (
+                            <option key={rover.id} value={rover.id}>
+                              {rover.name} — {rover.velocityMps} m/s
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                      <div style={{ display: 'grid', gap: '0.35rem' }}>
-                        {ROVERS.map((rover) => {
-                          const active = rover.id === selectedRoverId
-                          return (
-                            <button
-                              key={rover.id}
-                              type="button"
-                              onClick={() => setSelectedRoverId(rover.id)}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.5rem',
-                                width: '100%',
-                                padding: '0.3rem',
-                                borderRadius: '8px',
-                                border: `2px solid ${active ? 'var(--acento)' : 'var(--burnt-rose-2)'}`,
-                                background: active ? 'var(--burnt-rose)' : 'var(--superficie)',
-                                color: 'var(--texto)',
-                                cursor: 'pointer',
-                                textAlign: 'left',
-                                font: 'inherit',
-                              }}
-                            >
-                              <img src={rover.photo} alt={rover.name} style={{ width: '56px', height: '36px', objectFit: 'cover', borderRadius: '4px' }} />
-                              <span style={{ fontSize: '0.78rem' }}>{rover.name}</span>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
+                    )}
                   </section>
                 )}
 
@@ -560,15 +616,15 @@ export default function Partial() {
                             )
                           })}
                           {routeData.map((route, index) => {
+                            if (routeChosen && selectedRouteIndex !== index) return null
                             const heights = route.heights ?? []
                             if (heights.length < 2) return null
                             const color = ROUTE_COLORS[index] ?? '#38bdf8'
                             const isSelected = selectedRouteIndex === index
-                            const dimmed = selectedRouteIndex != null && !isSelected
                             const pts = heights.map((h, i) => `${toX(i, heights.length)},${toY(h)}`).join(' ')
                             const area = `${pts} ${W},${H} 0,${H}`
                             return (
-                              <g key={index} opacity={dimmed ? 0.25 : 1}>
+                              <g key={index} opacity={1}>
                                 <polygon points={area} fill={color} opacity={isSelected ? 0.28 : 0.18} />
                                 <polyline
                                   points={pts}
@@ -597,56 +653,93 @@ export default function Partial() {
                         </div>
                       </div>
                       <div style={{ display: 'grid', gap: '0.5rem' }}>
-                        {routeData.map((route, index) => {
-                          const color = ROUTE_COLORS[index] ?? '#38bdf8'
-                          const isSelected = selectedRouteIndex === index
-                          const dimmed = selectedRouteIndex != null && !isSelected
-                          const lengthMeters = model ? getRouteLengthMeters(model, route.path) : 0
-                          const durationSeconds = selectedRover
-                            ? getRouteDurationSeconds(lengthMeters, selectedRover.velocityMps)
-                            : NaN
-                          const name = getRouteLabel(route, index)
-                          return (
-                            <button
-                              key={index}
-                              type="button"
-                              onClick={() => setSelectedRouteIndex(isSelected ? null : index)}
-                              className={`btn${isSelected ? ' btn--active' : ''}`}
-                              style={{
-                                display: 'grid',
-                                gap: '0.2rem',
-                                textAlign: 'left',
-                                padding: '0.55rem 0.7rem',
-                                textTransform: 'none',
-                                fontWeight: 600,
-                                opacity: dimmed ? 0.45 : 1,
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--acento)' }}>
-                                <span
-                                  aria-hidden="true"
-                                  style={{
-                                    width: '0.7rem',
-                                    height: '0.7rem',
-                                    borderRadius: '999px',
-                                    background: color,
-                                    border: '1px solid var(--burnt-rose-2)',
-                                    display: 'inline-block',
-                                    flex: 'none',
+                        {routeData
+                          .filter((_, index) => (routeChosen ? selectedRouteIndex === index : true))
+                          .map((route) => {
+                            const index = routeData.indexOf(route)
+                            const color = ROUTE_COLORS[index] ?? '#38bdf8'
+                            const isSelected = selectedRouteIndex === index
+                            const lengthMeters = model ? getRouteLengthMeters(model, route.path) : 0
+                            const durationSeconds = selectedRover
+                              ? getRouteDurationSeconds(lengthMeters, selectedRover.velocityMps)
+                              : NaN
+                            const name = getRouteLabel(route, index)
+                            return (
+                              <div key={index} style={{ display: 'grid', gap: '0.35rem' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (routeChosen) return
+                                    setSelectedRouteIndex(isSelected ? null : index)
                                   }}
-                                />
-                                <span>{name}</span>
+                                  className={`btn${isSelected ? ' btn--active' : ''}`}
+                                  style={{
+                                    display: 'grid',
+                                    gap: '0.2rem',
+                                    textAlign: 'left',
+                                    padding: '0.55rem 0.7rem',
+                                    textTransform: 'none',
+                                    fontWeight: 600,
+                                    cursor: routeChosen ? 'default' : 'pointer',
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--acento)' }}>
+                                    <span
+                                      aria-hidden="true"
+                                      style={{
+                                        width: '0.7rem',
+                                        height: '0.7rem',
+                                        borderRadius: '999px',
+                                        background: color,
+                                        border: '1px solid var(--burnt-rose-2)',
+                                        display: 'inline-block',
+                                        flex: 'none',
+                                      }}
+                                    />
+                                    <span>{name}</span>
+                                  </div>
+                                  <div style={{ fontSize: '0.78rem', color: 'var(--texto)', fontWeight: 400 }}>
+                                    <div>Total length: {formatLength(lengthMeters)}</div>
+                                    <div>Estimated time: {formatDuration(durationSeconds)}</div>
+                                    {route.total_height_variation != null && (
+                                      <div>Total elevation change: {formatMeters(route.total_height_variation)}</div>
+                                    )}
+                                  </div>
+                                </button>
                               </div>
-                              <div style={{ fontSize: '0.78rem', color: 'var(--texto)', fontWeight: 400 }}>
-                                <div>Total length: {formatLength(lengthMeters)}</div>
-                                <div>Estimated time: {formatDuration(durationSeconds)}</div>
-                                {route.total_height_variation != null && (
-                                  <div>Total elevation change: {formatMeters(route.total_height_variation)}</div>
-                                )}
-                              </div>
-                            </button>
-                          )
-                        })}
+                            )
+                          })}
+                        {!routeChosen && selectedRouteIndex != null && (
+                          <button
+                            type="button"
+                            className="btn"
+                            onClick={() => {
+                              setRouteChosen(true)
+                              let start = routeStart ?? astronaut
+                              if (!start && model && selectedRouteIndex != null) {
+                                const p = routeData[selectedRouteIndex]?.path?.[0]
+                                if (p) {
+                                  const geo = demPixelToGeo(model, p[0], p[1])
+                                  if (geo) start = { lat: geo.lat, lon: geo.lon, elevation: 0 }
+                                }
+                              }
+                              if (start) setFocusTarget({ lat: start.lat, lon: start.lon })
+                            }}
+                            style={{ marginTop: '0.25rem' }}
+                          >
+                            Select this route
+                          </button>
+                        )}
+                        {routeChosen && (
+                          <button
+                            type="button"
+                            className="btn"
+                            onClick={() => setRouteChosen(false)}
+                            style={{ marginTop: '0.25rem' }}
+                          >
+                            Change route
+                          </button>
+                        )}
                       </div>
                     </>
                   )
@@ -679,70 +772,7 @@ export default function Partial() {
             </header>
           </div>
 
-          <figure
-            className="partial-legend"
-            style={{
-              position: 'absolute',
-              overflow: 'hidden',
-              borderWidth: '1px',
-              padding: '0.6rem',
-              width: '14rem',
-              height: '14rem',
-            }}
-          >
-            {selectedRover && (
-              <div
-                aria-hidden="true"
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  backgroundImage: `url(${selectedRover.photo})`,
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                  opacity: 0.18,
-                }}
-              />
-            )}
-            <div
-              style={{
-                position: 'relative',
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-              }}
-            >
-              <figcaption
-                style={{
-                  margin: 0,
-                  fontSize: '0.65rem',
-                  fontWeight: 700,
-                  letterSpacing: '0.1em',
-                  textTransform: 'uppercase',
-                  fontFamily: 'var(--fuente-titulo)',
-                  color: 'var(--acento)',
-                }}
-              >
-                Rover
-              </figcaption>
-              <div style={{ fontSize: '0.72rem', color: 'var(--texto)', textAlign: 'right' }}>
-                {selectedRover ? (
-                  <>
-                    <div style={{ color: 'var(--acento)', fontWeight: 700, fontSize: '0.82rem' }}>
-                      {selectedRover.name}
-                    </div>
-                    <div style={{ color: 'var(--tangerine-dream)', fontWeight: 600, marginBottom: '0.25rem' }}>
-                      {selectedRover.description}
-                    </div>
-                    <div>Speed: {selectedRover.velocityMps} m/s</div>
-                    <div>Max height diff/m: {selectedRover.maxHeightDiffPerMeter} m/m</div>
-                  </>
-                ) : (
-                  <div style={{ color: 'var(--texto)' }}>No rover selected</div>
-                )}
-              </div>
-            </div>
-          </figure>
+
 
           <div className={`partial-readout ${hover ? 'is-active' : ''}`}>
             {hover ? (
@@ -762,9 +792,7 @@ export default function Partial() {
             )}
           </div>
 
-          <p className="partial-source">
-            Source: {meta.sourceFile} · {meta.crs}
-          </p>
+
         </>
       )}
 
