@@ -29,6 +29,10 @@ def resolve_preprocessed_file(zone: str) -> Path:
 
     path = DATA_DIR / f"{safe_name}.npz"
     if not path.is_file():
+        # Try matching by prefix or finding an npz containing the zone name
+        candidates = list(DATA_DIR.glob(f"*{safe_name}*.npz"))
+        if candidates:
+            return candidates[0]
         raise FileNotFoundError(
             f"No existe el binario preprocesado: {path}. "
             "Ejecuta primero preprocess_dem.py para generar el archivo .npz."

@@ -31,7 +31,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 try:
     with open(DATA_DIR /"locations.csv", "x") as file:
-        file.write("NAME;LAT;LON;HEIGHT;ZONE\n\"Curiosity Rover\";4.79;137.39;0;\"gale\"\n\"Perseverance Rover\";18.447;77.402;0;\"jezero\"")
+        file.write("NAME;LAT;LON;HEIGHT;ZONE\n\"Curiosity Rover\";4.79;137.39;0;\"gale\"\n\"Perseverance Rover\";18.447;77.402;0;\"jezero\"\n")
 except FileExistsError:
     print("File already exists. Skipping creation.")
 
