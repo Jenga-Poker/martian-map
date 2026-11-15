@@ -11,13 +11,12 @@ import Button from './../components/Button'
 import AIOverlay from './../components/AIOverlay'
 import { getPoi } from './../data/pois'
 import {
-  ROUTE_VELOCITY_MPS,
   getRouteDurationSeconds,
   getRouteLengthMeters,
   parseResultExample,
 } from './../utils/pathy'
+import { DEFAULT_ROVER_ID, ROVERS, getRover } from './../utils/rovy'
 import {
-  MARS_PALETTE,
   formatCoord,
   formatMeters,
   loadTerrain,
@@ -26,8 +25,6 @@ import {
 } from './../utils/terrain'
 import { createTerrainModel } from './../utils/terrainModel'
 import './../App.css'
-
-const legendGradient = `linear-gradient(to top, ${MARS_PALETTE.join(', ')})`
 
 export default function Partial() {
   const navigate = useNavigate()
@@ -44,6 +41,8 @@ export default function Partial() {
   const [panelOpen, setPanelOpen] = useState(true)
   const [astronaut, setAstronaut] = useState<AstronautPosition | null>(null)
   const [selectedRouteIndex, setSelectedRouteIndex] = useState<number | null>(null)
+  const [selectedRoverId, setSelectedRoverId] = useState<string | null>(DEFAULT_ROVER_ID)
+  const selectedRover = useMemo(() => getRover(selectedRoverId), [selectedRoverId])
 
   useEffect(() => {
     setAstronaut(null)
@@ -105,8 +104,6 @@ export default function Partial() {
       height: (meta.heightMeters / 1000).toFixed(1),
     }
   }, [meta])
-
-  const midElevation = meta ? (meta.minElevation + meta.maxElevation) / 2 : 0
 
   return (
     <main className="partial-app">
@@ -293,7 +290,9 @@ export default function Partial() {
                           const isSelected = selectedRouteIndex === index
                           const dimmed = selectedRouteIndex != null && !isSelected
                           const lengthMeters = model ? getRouteLengthMeters(model, route.path) : 0
-                          const durationSeconds = getRouteDurationSeconds(lengthMeters, ROUTE_VELOCITY_MPS)
+                          const durationSeconds = selectedRover
+                            ? getRouteDurationSeconds(lengthMeters, selectedRover.velocityMps)
+                            : NaN
                           const name = routeNames[index] ?? `Route ${index + 1}`
                           return (
                             <button
@@ -368,17 +367,67 @@ export default function Partial() {
             </header>
           </div>
 
-          <figure className="partial-legend">
-            <figcaption>Elevation</figcaption>
-            <div className="partial-legend__body">
+          <figure
+            className="partial-legend"
+            style={{
+              position: 'absolute',
+              overflow: 'hidden',
+              borderWidth: '1px',
+              padding: '0.6rem',
+              width: '14rem',
+              height: '14rem',
+            }}
+          >
+            {selectedRover && (
               <div
-                className="partial-legend__bar"
-                style={{ backgroundImage: legendGradient }}
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  backgroundImage: `url(${selectedRover.photo})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  opacity: 0.18,
+                }}
               />
-              <div className="partial-legend__ticks">
-                <span>{formatMeters(meta.maxElevation)}</span>
-                <span>{formatMeters(midElevation)}</span>
-                <span>{formatMeters(meta.minElevation)}</span>
+            )}
+            <div
+              style={{
+                position: 'relative',
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+              }}
+            >
+              <figcaption
+                style={{
+                  margin: 0,
+                  fontSize: '0.65rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  fontFamily: 'var(--fuente-titulo)',
+                  color: 'var(--acento)',
+                }}
+              >
+                Rover
+              </figcaption>
+              <div style={{ fontSize: '0.72rem', color: 'var(--texto)', textAlign: 'right' }}>
+                {selectedRover ? (
+                  <>
+                    <div style={{ color: 'var(--acento)', fontWeight: 700, fontSize: '0.82rem' }}>
+                      {selectedRover.name}
+                    </div>
+                    <div style={{ color: 'var(--tangerine-dream)', fontWeight: 600, marginBottom: '0.25rem' }}>
+                      {selectedRover.description}
+                    </div>
+                    <div>Speed: {selectedRover.velocityMps} m/s</div>
+                    <div>Max height diff/m: {selectedRover.maxHeightDiffPerMeter} m/m</div>
+                  </>
+                ) : (
+                  <div style={{ color: 'var(--texto)' }}>No rover selected</div>
+                )}
               </div>
             </div>
           </figure>
