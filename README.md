@@ -1,3 +1,6 @@
+---
+modified: 2026-11-15
+---
 <div align="center">
 
 <img src="docs/media/maia-logo.svg" width="130" alt="Maia logo" />
@@ -594,6 +597,14 @@ These are approximate values used for planning estimates, not rover telemetry.
 - **Live mission inputs.** Add battery level, vehicle condition and time left before dark to the route suggestions.
 - **Use the rockiness layer in routing.** The THEMIS rockiness data is already aligned with each terrain; it should influence the cost, not just the visuals.
 - **Better risk explanations.** Tell the astronaut *why* a route is red: slope, rocks, distance from base, or a combination.
+
+---
+
+## Warnings
+
+The project has its limitations:
+- **Valles Marineris coordinates** are not accurate
+- It must be run on **chrome 139+** for speech recognition API to work
 
 ---
 
