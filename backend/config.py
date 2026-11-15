@@ -48,6 +48,9 @@ ACTIONS = {
     "add_location": {
         "description": "Adds, creates, marks or saves a new location.",
     },
+    "distance_to_earth": {
+        "description": "Returns the distance from a point on Mars to Earth (Lantejuela, Spain) when the user asks for the distance to Earth.",
+    },
 }
 
 LOCATIONS_FILE = DATA_DIR / "locations.csv"

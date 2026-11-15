@@ -32,18 +32,19 @@ type AIOverlayProps = {
 type OverlayState = 'idle' | 'analyzing' | 'routing' | 'done' | 'error'
 
 const ACTION_LABELS: Record<string, string> = {
-  navigate_to: 'Calcular ruta',
-  find_path: 'Buscar ruta',
-  calculate_route: 'Calcular ruta',
-  add_location: 'Añadir ubicación',
+  navigate_to: 'Calculate route',
+  find_path: 'Find route',
+  calculate_route: 'Calculate route',
+  add_location: 'Add location',
+  distance_to_earth: 'Distance to Earth',
 }
 
 const OPTION_LABELS: Record<string, string> = {
   rover: 'Rover',
-  end: 'Destino',
-  zone: 'Zona',
-  multipliers: 'Multiplicadores',
-  max_height_diff: 'Desnivel máximo',
+  end: 'Destination',
+  zone: 'Zone',
+  multipliers: 'Multipliers',
+  max_height_diff: 'Max height difference',
 }
 
 function formatActionLabel(action: string): string {
@@ -104,7 +105,7 @@ function formatErrorDetail(detail: unknown): string {
       return String(detail)
     }
   }
-  return String(detail ?? 'Error desconocido')
+  return String(detail ?? 'Unknown error')
 }
 
 export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
@@ -150,7 +151,7 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
           throw new Error(
             data?.detail != null
               ? formatErrorDetail(data.detail)
-              : `Error en servidor (${response.status})`,
+              : `Server error (${response.status})`,
           )
         }
 
@@ -171,25 +172,30 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
           action.includes('location') ||
           action.includes('ubicacion')
 
+        const isDistanceToEarthAction =
+          action === 'distance_to_earth' ||
+          action.includes('distance_to_earth') ||
+          (action.includes('distance') && action.includes('earth'))
+
         if (!onAction) {
           setActionResult({
             ok: false,
-            message: 'No hay un manejador de acciones disponible.',
+            message: 'No action handler is available.',
           })
           setOverlayState('error')
           return
         }
 
-        if (!isPathAction && !isAddLocationAction) {
+        if (!isPathAction && !isAddLocationAction && !isDistanceToEarthAction) {
           setActionResult({
             ok: true,
-            message: 'Acción completada.',
+            message: 'Action completed.',
           })
           setOverlayState('done')
           return
         }
 
-        setOverlayState('routing')
+        setOverlayState(isDistanceToEarthAction ? 'analyzing' : 'routing')
         const result = await onAction(data, controller.signal)
         if (controller.signal.aborted) return
         setActionResult(result)
@@ -205,7 +211,7 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
         setError(
           cause instanceof Error
             ? cause.message
-            : 'Error al comunicarse con la IA.',
+            : 'Error communicating with the AI.',
         )
         setOverlayState('error')
       } finally {
@@ -257,16 +263,16 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
   const displayTranscript = finalTranscript || transcript
 
   const statusLabel = listening
-    ? 'Escuchando…'
+    ? 'Listening…'
     : overlayState === 'analyzing'
-      ? 'Analizando instrucción…'
+      ? 'Analyzing instruction…'
       : overlayState === 'routing'
-        ? 'Calculando ruta…'
+        ? 'Calculating route…'
         : overlayState === 'done'
-          ? 'Proceso completado'
+          ? 'Process completed'
           : overlayState === 'error'
             ? 'Error'
-            : 'Asistente de voz'
+            : 'Voice assistant'
 
   const optionEntries = aiResult?.options
     ? Object.entries(aiResult.options).filter(([, value]) => {
@@ -295,7 +301,7 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
               <div
                 className={`ai-overlay__step ${displayTranscript || interim ? 'is-done' : ''}`}
               >
-                <div className="ai-overlay__step-title">Texto transcrito</div>
+                <div className="ai-overlay__step-title">Transcribed text</div>
                 <p className="ai-overlay__step-body ai-overlay__transcript">
                   {displayTranscript && <span>{displayTranscript} </span>}
                   {interim && (
@@ -303,7 +309,7 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
                   )}
                   {listening && !displayTranscript && !interim && (
                     <span className="ai-overlay__placeholder">
-                      Habla ahora…
+                      Speak now…
                     </span>
                   )}
                   {listening && (
@@ -316,11 +322,11 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
             {aiResult && (
               <div className="ai-overlay__step is-done">
                 <div className="ai-overlay__step-title">
-                  Interpretación de la IA
+                  AI interpretation
                 </div>
                 <div className="ai-overlay__step-body">
                   <div className="ai-overlay__action">
-                    <span className="ai-overlay__badge">Acción</span>
+                    <span className="ai-overlay__badge">Action</span>
                     <strong>{formatActionLabel(aiResult.action)}</strong>
                   </div>
                   {optionEntries.length > 0 && (
@@ -341,7 +347,7 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
               <div
                 className={`ai-overlay__step ${actionResult.ok ? 'is-done' : 'is-error'}`}
               >
-                <div className="ai-overlay__step-title">Resultado</div>
+                <div className="ai-overlay__step-title">Result</div>
                 <div className="ai-overlay__step-body">
                   <p className="ai-overlay__confirm">
                     {actionResult.ok ? '✓ ' : '✕ '}
@@ -356,7 +362,7 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
                       {actionResult.points != null &&
                         actionResult.distance != null && <span> · </span>}
                       {actionResult.distance != null && (
-                        <span>coste {actionResult.distance}</span>
+                        <span>cost {actionResult.distance}</span>
                       )}
                     </p>
                   )}
@@ -382,12 +388,12 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
         disabled={!supported || busy}
         aria-pressed={listening}
         aria-label={
-          listening ? 'Detener dictado por voz' : 'Abrir asistente de voz'
+          listening ? 'Stop voice dictation' : 'Open voice assistant'
         }
         title={
           supported
-            ? 'Asistente de voz'
-            : 'Tu navegador no soporta reconocimiento de voz'
+            ? 'Voice assistant'
+            : 'Your browser does not support speech recognition'
         }
       >
         {listening && <span className="ai-overlay__pulse" aria-hidden="true" />}

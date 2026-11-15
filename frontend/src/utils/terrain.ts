@@ -66,7 +66,7 @@ export const MARS_PALETTE = [
   '#f58b66',
 ]
 
-const numberFormat = new Intl.NumberFormat('es-ES', {
+const numberFormat = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 })
 
@@ -87,18 +87,18 @@ export async function loadTerrain(terrainDir: string): Promise<TerrainData> {
     fetch(`${baseUrl}/rocky.bin`),
   ])
   if (!metaResponse.ok) {
-    throw new Error(`No se pudo cargar el metadata (${metaResponse.status})`)
+    throw new Error(`Could not load metadata (${metaResponse.status})`)
   }
   const rawMeta = (await metaResponse.json()) as TerrainMeta
   const meta = normalizeTerrainMeta(rawMeta)
 
   if (!heightResponse.ok) {
-    throw new Error(`No se pudo cargar el heightmap (${heightResponse.status})`)
+    throw new Error(`Could not load heightmap (${heightResponse.status})`)
   }
   const buffer = await heightResponse.arrayBuffer()
   const heights = new Uint16Array(buffer)
   if (heights.length !== meta.width * meta.height) {
-    throw new Error('El heightmap no coincide con las dimensiones del metadata')
+    throw new Error('Heightmap dimensions do not match metadata')
   }
 
   let rocky: Uint8Array | null = null

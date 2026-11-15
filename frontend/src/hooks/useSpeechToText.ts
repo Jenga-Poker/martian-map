@@ -33,6 +33,7 @@ type SpeechRecognitionInstance = {
   continuous: boolean
   interimResults: boolean
   maxAlternatives: number
+  processLocally?: boolean
   start: () => void
   stop: () => void
   abort: () => void
@@ -45,12 +46,13 @@ type SpeechRecognitionInstance = {
 type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance
 
 const ERROR_MESSAGES: Record<string, string> = {
-  'not-allowed': 'Permiso de micrófono denegado.',
-  'service-not-allowed': 'El servicio de voz no está disponible.',
-  'audio-capture': 'No se encontró un micrófono.',
-  network: 'Sin conexión con el servicio de voz.',
-  'no-speech': 'No se detectó voz. Inténtalo de nuevo.',
-  'language-not-supported': 'Idioma no compatible con el dictado.',
+  'not-allowed': 'Microphone permission denied.',
+  'service-not-allowed': 'Speech service is not available.',
+  'audio-capture': 'No microphone was found.',
+  network: 'No connection to the speech service.',
+  'no-speech': 'No speech detected. Please try again.',
+  'language-not-supported': 'Language not supported for dictation.',
+  'service-not-installed': 'Local speech recognition service is not installed.',
 }
 
 function getRecognitionConstructor(): SpeechRecognitionConstructor | null {
@@ -114,6 +116,9 @@ export function useSpeechToText(options?: { onFinal?: (text: string) => void }) 
     recognition.continuous = false
     recognition.interimResults = true
     recognition.maxAlternatives = 1
+    if ('processLocally' in recognition) {
+      recognition.processLocally = true
+    }
 
     finalRef.current = ''
     interimRef.current = ''
@@ -172,7 +177,7 @@ export function useSpeechToText(options?: { onFinal?: (text: string) => void }) 
     } catch {
       recognitionRef.current = null
       updateStatus('idle')
-      setError('No se pudo iniciar el dictado.')
+      setError('Could not start dictation.')
     }
   }, [updateStatus])
 

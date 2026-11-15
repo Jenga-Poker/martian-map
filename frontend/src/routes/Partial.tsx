@@ -62,7 +62,7 @@ function formatErrorDetail(detail: unknown): string {
       return String(detail)
     }
   }
-  return String(detail ?? 'Error desconocido')
+  return String(detail ?? 'Unknown error')
 }
 
 async function readError(response: Response): Promise<string> {
@@ -70,7 +70,7 @@ async function readError(response: Response): Promise<string> {
     | { detail?: unknown }
     | null
   if (data?.detail != null) return formatErrorDetail(data.detail)
-  return `Error en servidor (${response.status})`
+  return `Server error (${response.status})`
 }
 
 function normalizeRoutes(raw: unknown): RouteData[] {
@@ -124,6 +124,12 @@ export default function Partial() {
   const [newLocationName, setNewLocationName] = useState('')
   const [isSavingLocation, setIsSavingLocation] = useState(false)
   const [saveLocationError, setSaveLocationError] = useState<string | null>(null)
+  const [distancePopup, setDistancePopup] = useState<{
+    open: boolean
+    distanceKm: number | null
+    from: { lat: number; lon: number } | null
+    error: string | null
+  }>({ open: false, distanceKm: null, from: null, error: null })
   const selectedRover = useMemo(() => getRover(selectedRoverId), [selectedRoverId])
 
   useEffect(() => {
@@ -272,11 +278,11 @@ export default function Partial() {
       if (e) e.preventDefault()
       const trimmedName = newLocationName.trim()
       if (!trimmedName) {
-        setSaveLocationError('El nombre no puede estar vacío.')
+        setSaveLocationError('Name cannot be empty.')
         return
       }
       if (!pendingLocationPos) {
-        setSaveLocationError('No hay coordenadas seleccionadas.')
+        setSaveLocationError('No coordinates selected.')
         return
       }
 
@@ -305,7 +311,7 @@ export default function Partial() {
         await refreshLocations()
       } catch (err) {
         setSaveLocationError(
-          err instanceof Error ? err.message : 'Error al guardar la ubicación.',
+          err instanceof Error ? err.message : 'Error saving location.',
         )
       } finally {
         setIsSavingLocation(false)
@@ -331,6 +337,68 @@ export default function Partial() {
         action.includes('add_location') ||
         action.includes('location') ||
         action.includes('ubicacion')
+
+      const isDistanceToEarthAction =
+        action === 'distance_to_earth' ||
+        action.includes('distance_to_earth') ||
+        (action.includes('distance') && action.includes('earth'))
+
+      if (isDistanceToEarthAction) {
+        if (!data || !model) {
+          return { ok: false, message: 'El terreno aún no está cargado.' }
+        }
+
+        const point = astronaut
+          ? { lat: astronaut.lat, lon: astronaut.lon }
+          : { lat: data.meta.center.lat, lon: data.meta.center.lon }
+        const elevationMeters = astronaut
+          ? astronaut.elevation
+          : data.meta.minElevation + (data.meta.maxElevation - data.meta.minElevation) / 2
+
+        try {
+          const response = await fetch(`${API_URL}/distance-to-lantejuela`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              point: {
+                lat: point.lat,
+                lon: point.lon,
+                height_km: elevationMeters / 1000,
+              },
+              mars_time: new Date().toISOString(),
+            }),
+            signal,
+          })
+          if (!response.ok) {
+            throw new Error(await readError(response))
+          }
+          const payload = (await response.json()) as { distance_km?: number }
+          const distanceKm =
+            typeof payload.distance_km === 'number' ? payload.distance_km : null
+          if (distanceKm == null || !Number.isFinite(distanceKm)) {
+            throw new Error('Invalid distance response.')
+          }
+          setDistancePopup({ open: true, distanceKm, from: point, error: null })
+          return {
+            ok: true,
+            message: `Distance to Lantejuela: ${distanceKm.toLocaleString('en-US', {
+              maximumFractionDigits: 0,
+            })} km.`,
+          }
+        } catch (cause) {
+          if (
+            typeof cause === 'object' &&
+            cause !== null &&
+            (cause as { name?: string }).name === 'AbortError'
+          ) {
+            return { ok: false, message: 'Operation cancelled.' }
+          }
+          const message =
+            cause instanceof Error ? cause.message : 'Error calculating distance.'
+          setDistancePopup({ open: true, distanceKm: null, from: point, error: message })
+          return { ok: false, message }
+        }
+      }
 
       if (isAddLocationAction) {
         if (!data || !model) {
@@ -358,26 +426,26 @@ export default function Partial() {
 
         return {
           ok: true,
-          message: 'Introduce el nombre de la ubicación en el modal.',
+          message: 'Enter the location name in the modal.',
         }
       }
 
       if (!isPathAction) {
         return {
           ok: true,
-          message: 'Acción no reconocida.',
+          message: 'Action not recognized.',
         }
       }
 
       if (!data || !model) {
-        return { ok: false, message: 'El terreno aún no está cargado.' }
+        return { ok: false, message: 'Terrain is not loaded yet.' }
       }
 
       if (!astronaut) {
         return {
           ok: false,
           message:
-            'Coloca primero el astronauta haciendo clic sobre el terreno.',
+            'Place the astronaut on the terrain first by clicking on it.',
         }
       }
 
@@ -386,7 +454,7 @@ export default function Partial() {
       if (!endName) {
         return {
           ok: false,
-          message: 'La IA no ha identificado un destino válido.',
+          message: 'The AI did not identify a valid destination.',
         }
       }
 
@@ -396,7 +464,7 @@ export default function Partial() {
       if (!rover) {
         return {
           ok: false,
-          message: 'No hay un rover disponible para calcular la ruta.',
+          message: 'No rover is available to calculate the route.',
         }
       }
       setSelectedRoverId(rover.id)
@@ -431,7 +499,7 @@ export default function Partial() {
         if (!end) {
           return {
             ok: false,
-            message: `No se encontraron coordenadas para "${endName}" en la zona ${poi.id}.`,
+            message: `No coordinates found for "${endName}" in zone ${poi.id}.`,
           }
         }
         const destination = end
@@ -444,7 +512,7 @@ export default function Partial() {
         ) {
           return {
             ok: false,
-            message: `Las coordenadas de "${destination.name}" no están dentro de ${poi.name}. Revisa data/locations.csv.`,
+            message: `Coordinates for "${destination.name}" are outside ${poi.name}. Check data/locations.csv.`,
           }
         }
 
@@ -480,7 +548,7 @@ export default function Partial() {
         if (routes.length === 0) {
           return {
             ok: false,
-            message: 'El servidor no devolvió ninguna ruta.',
+            message: 'The server did not return any route.',
           }
         }
 
@@ -492,7 +560,7 @@ export default function Partial() {
         setRouteEnd({ name: destination.name, lat: destination.lat, lon: destination.lon })
         return {
           ok: true,
-          message: `Ruta generada correctamente. ${routes.length} rutas calculadas.`,
+          message: `Route generated successfully. ${routes.length} route(s) calculated.`,
         }
       } catch (cause) {
         if (
@@ -500,14 +568,14 @@ export default function Partial() {
           cause !== null &&
           (cause as { name?: string }).name === 'AbortError'
         ) {
-          return { ok: false, message: 'Operación cancelada.' }
+          return { ok: false, message: 'Operation cancelled.' }
         }
         return {
           ok: false,
           message:
             cause instanceof Error
               ? cause.message
-              : 'Error al calcular la ruta.',
+              : 'Error calculating the route.',
         }
       }
     },
@@ -1101,6 +1169,105 @@ export default function Partial() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {distancePopup.open && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="distance-earth-title"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(4px)',
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setDistancePopup((prev) => ({ ...prev, open: false }))
+            }
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--espresso)',
+              border: '2px solid var(--burnt-rose-2)',
+              borderRadius: '16px',
+              padding: '1.5rem',
+              width: '90%',
+              maxWidth: '420px',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem',
+            }}
+          >
+            <h2
+              id="distance-earth-title"
+              style={{
+                margin: 0,
+                fontSize: '1.1rem',
+                color: 'var(--acento)',
+                fontFamily: 'var(--fuente-titulo)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
+              Distance to Earth
+            </h2>
+
+            {distancePopup.error ? (
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#ff6b6b' }}>
+                {distancePopup.error}
+              </p>
+            ) : (
+              <div
+                style={{
+                  fontSize: '0.85rem',
+                  color: 'var(--texto)',
+                  background: 'var(--superficie)',
+                  padding: '0.8rem 0.9rem',
+                  borderRadius: '8px',
+                  border: '1px solid var(--burnt-rose-2)',
+                }}
+              >
+                <div style={{ marginBottom: '0.35rem' }}>
+                  <strong>Destination:</strong> Lantejuela, Sevilla (España)
+                </div>
+                <div style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--acento)' }}>
+                  {distancePopup.distanceKm != null
+                    ? `${distancePopup.distanceKm.toLocaleString('en-US', {
+                        maximumFractionDigits: 0,
+                      })} km`
+                    : '—'}
+                </div>
+                {distancePopup.from && (
+                  <div style={{ marginTop: '0.4rem', fontSize: '0.78rem' }}>
+                    From: {formatCoord(distancePopup.from.lat, 'N', 'S')} ·{' '}
+                    {formatCoord(distancePopup.from.lon, 'E', 'W')}
+                  </div>
+                )}
+                <div style={{ marginTop: '0.2rem', fontSize: '0.72rem', opacity: 0.85 }}>
+                  Calculated for current time ({new Date().toLocaleString()}).
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
+              <button
+                type="button"
+                className="btn btn--active"
+                onClick={() => setDistancePopup((prev) => ({ ...prev, open: false }))}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

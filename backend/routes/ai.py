@@ -15,7 +15,7 @@ class AIRequest(BaseModel):
 async def ai_endpoint(request: AIRequest):
     """Recibe una instrucción del usuario y devuelve la acción y parámetros interpretados."""
     if not request.instruction.strip():
-        raise HTTPException(status_code=400, detail="La instrucción no puede estar vacía.")
+        raise HTTPException(status_code=400, detail="Instruction cannot be empty.")
 
     try:
         zone = request.zone.strip() if isinstance(request.zone, str) else None
@@ -25,5 +25,5 @@ async def ai_endpoint(request: AIRequest):
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(
-            status_code=502, detail=f"Error al comunicarse con el modelo: {exc}"
+            status_code=502, detail=f"Error communicating with the model: {exc}"
         ) from exc

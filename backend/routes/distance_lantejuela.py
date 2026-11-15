@@ -49,7 +49,7 @@ def _parse_time(value: str) -> datetime:
         dt = datetime.fromisoformat(v)
     except ValueError as exc:
         raise ValueError(
-            "Formato de tiempo no válido. Usa ISO 8601 UTC (ej. 2026-11-15T12:00:00Z) o timestamp Unix."
+            "Invalid time format. Use ISO 8601 UTC (e.g. 2026-11-15T12:00:00Z) or a Unix timestamp."
         ) from exc
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)

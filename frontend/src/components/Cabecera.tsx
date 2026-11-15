@@ -2,14 +2,14 @@ import { useState, useEffect } from "react";
 import "./Cabecera.css";
 import { tierraADariano } from "../utils/marte";
 
-const formatoFecha = new Intl.DateTimeFormat("es-ES", {
+const formatoFecha = new Intl.DateTimeFormat("en-US", {
   day: "2-digit",
   month: "short",
   year: "numeric",
   timeZone: "UTC",
 });
 
-const formatoHora = new Intl.DateTimeFormat("es-ES", {
+const formatoHora = new Intl.DateTimeFormat("en-US", {
   hour: "2-digit",
   minute: "2-digit",
   second: "2-digit",
@@ -28,12 +28,12 @@ export default function Cabecera() {
   const marte = tierraADariano(ahora);
 
   return (
-    <header className="cabecera-hud" aria-label="Panel temporal Tierra y Marte">
+    <header className="cabecera-hud" aria-label="Earth and Mars time panel">
       <div className="cabecera-hud__frame">
         <div className="cabecera-hud__panel">
-          <section className="hud-reloj" aria-label="Hora terrestre">
+          <section className="hud-reloj" aria-label="Earth time">
             <div className="hud-reloj__datos">
-              <span className="hud-reloj__etiqueta">Tierra · UTC</span>
+              <span className="hud-reloj__etiqueta">Earth · UTC</span>
               <span className="hud-reloj__fecha">{formatoFecha.format(ahora)}</span>
               <span className="hud-reloj__hora">{formatoHora.format(ahora)}</span>
             </div>
@@ -43,9 +43,9 @@ export default function Cabecera() {
             <span />
           </div>
 
-          <section className="hud-reloj hud-reloj--marte" aria-label="Hora marciana">
+          <section className="hud-reloj hud-reloj--marte" aria-label="Mars time">
             <div className="hud-reloj__datos hud-reloj__datos--der">
-              <span className="hud-reloj__etiqueta">Marte · MTC</span>
+              <span className="hud-reloj__etiqueta">Mars · MTC</span>
               <span className="hud-reloj__fecha">
                 {marte.diaSemana}, {marte.solMes} {marte.mesNombre} {marte.anio}
               </span>
