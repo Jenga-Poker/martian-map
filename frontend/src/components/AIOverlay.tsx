@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useRef, useState } from 'react'
 import logoMaya from '../assets/logomaya-limpio.svg'
 import { useSpeechToText } from '../hooks/useSpeechToText'
@@ -60,7 +61,11 @@ function formatOptionValue(key: string, value: unknown): string {
   if (key === 'rover' && typeof value === 'string') {
     return getRover(value)?.name ?? value.replace(/_/g, ' ')
   }
-  if (Array.isArray(value)) return value.map(formatValue).join(', ')
+
+  if (Array.isArray(value)) {
+    return value.map(formatValue).join(', ')
+  }
+
   if (typeof value === 'object' && value !== null) {
     return Object.entries(value)
       .map(([childKey, childValue]) => {
@@ -68,12 +73,17 @@ function formatOptionValue(key: string, value: unknown): string {
       })
       .join(', ')
   }
+
   return formatValue(value)
 }
 
 function formatValue(value: unknown): string {
   if (value == null) return '—'
-  if (Array.isArray(value)) return value.map(formatValue).join(', ')
+
+  if (Array.isArray(value)) {
+    return value.map(formatValue).join(', ')
+  }
+
   if (typeof value === 'object') {
     return Object.entries(value)
       .map(([key, childValue]) => {
@@ -81,30 +91,38 @@ function formatValue(value: unknown): string {
       })
       .join(', ')
   }
+
   return String(value)
 }
 
 function formatErrorDetail(detail: unknown): string {
   if (typeof detail === 'string') return detail
+
   if (Array.isArray(detail)) {
     const messages = detail.map((item) => {
       if (item && typeof item === 'object' && 'msg' in item) {
         const msg = (item as { msg?: unknown }).msg
         return typeof msg === 'string' ? msg : String(msg)
       }
+
       return formatErrorDetail(item)
     })
+
     return messages.filter(Boolean).join(', ')
   }
+
   if (detail && typeof detail === 'object') {
     const msg = (detail as { msg?: unknown }).msg
+
     if (typeof msg === 'string') return msg
+
     try {
       return JSON.stringify(detail)
     } catch {
       return String(detail)
     }
   }
+
   return String(detail ?? 'Unknown error')
 }
 
@@ -114,21 +132,39 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
   const [finalTranscript, setFinalTranscript] = useState('')
   const [aiResult, setAiResult] = useState<AIResult | null>(null)
   const [actionResult, setActionResult] = useState<AIActionResult | null>(null)
-  const abortRef = useRef<AbortController | null>(null)
 
+  const abortRef = useRef<AbortController | null>(null)
+  const mountedRef = useRef(true)
+  const processingRef = useRef(false)
+
+  // Evitar actualizaciones después de desmontar el componente.
   useEffect(() => {
+    mountedRef.current = true
+
     return () => {
+      mountedRef.current = false
       abortRef.current?.abort()
+      abortRef.current = null
     }
   }, [])
 
+  // Procesamiento de la instrucción reconocida localmente.
   const processInstruction = useCallback(
     async (instruction: string) => {
+      const normalizedInstruction = instruction.trim()
+
+      if (!normalizedInstruction || processingRef.current) {
+        return
+      }
+
+      processingRef.current = true
+
       abortRef.current?.abort()
+
       const controller = new AbortController()
       abortRef.current = controller
 
-      setFinalTranscript(instruction)
+      setFinalTranscript(normalizedInstruction)
       setAiResult(null)
       setActionResult(null)
       setError(null)
@@ -137,17 +173,21 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
       try {
         const response = await fetch(`${API_URL}/ai`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify({
-            instruction,
+            instruction: normalizedInstruction,
             zone,
           }),
           signal: controller.signal,
         })
+
         if (!response.ok) {
           const data = (await response.json().catch(() => null)) as
             | { detail?: unknown }
             | null
+
           throw new Error(
             data?.detail != null
               ? formatErrorDetail(data.detail)
@@ -156,10 +196,13 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
         }
 
         const data = (await response.json()) as AIResult
-        if (controller.signal.aborted) return
+
+        if (controller.signal.aborted || !mountedRef.current) return
+
         setAiResult(data)
 
         const action = (data.action || '').toLowerCase()
+
         const isPathAction =
           action === 'navigate_to' ||
           action.includes('path') ||
@@ -182,22 +225,33 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
             ok: false,
             message: 'No action handler is available.',
           })
+
           setOverlayState('error')
           return
         }
 
-        if (!isPathAction && !isAddLocationAction && !isDistanceToEarthAction) {
+        if (
+          !isPathAction &&
+          !isAddLocationAction &&
+          !isDistanceToEarthAction
+        ) {
           setActionResult({
             ok: true,
             message: 'Action completed.',
           })
+
           setOverlayState('done')
           return
         }
 
-        setOverlayState(isDistanceToEarthAction ? 'analyzing' : 'routing')
+        setOverlayState(
+          isDistanceToEarthAction ? 'analyzing' : 'routing',
+        )
+
         const result = await onAction(data, controller.signal)
-        if (controller.signal.aborted) return
+
+        if (controller.signal.aborted || !mountedRef.current) return
+
         setActionResult(result)
         setOverlayState(result.ok ? 'done' : 'error')
       } catch (cause) {
@@ -208,25 +262,36 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
         ) {
           return
         }
+
+        if (!mountedRef.current) return
+
         setError(
           cause instanceof Error
             ? cause.message
             : 'Error communicating with the AI.',
         )
+
         setOverlayState('error')
       } finally {
-        if (abortRef.current === controller) abortRef.current = null
+        if (abortRef.current === controller) {
+          abortRef.current = null
+        }
+
+        processingRef.current = false
       }
     },
     [onAction, zone],
   )
 
+  // Web Speech API: reconocimiento exclusivamente local.
   const {
     status: speechStatus,
     transcript,
     interim,
     error: speechError,
     supported,
+    modelReady,
+    installing,
     toggle,
     reset: resetSpeech,
   } = useSpeechToText({
@@ -235,10 +300,15 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
     },
   })
 
+  // Reset completo del asistente.
   const reset = useCallback(() => {
     abortRef.current?.abort()
     abortRef.current = null
+
+    processingRef.current = false
+
     resetSpeech()
+
     setOverlayState('idle')
     setError(null)
     setFinalTranscript('')
@@ -247,32 +317,43 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
   }, [resetSpeech])
 
   const listening = speechStatus === 'listening'
-  const busy = overlayState === 'analyzing' || overlayState === 'routing'
+
+  const busy =
+    installing ||
+    overlayState === 'analyzing' ||
+    overlayState === 'routing'
+
   const combinedError = speechError || error
+
   const showTranscript =
     listening ||
     transcript.length > 0 ||
     interim.length > 0 ||
     finalTranscript.length > 0
+
   const showPanel =
+    installing ||
     showTranscript ||
     busy ||
     Boolean(aiResult) ||
     Boolean(actionResult) ||
     Boolean(combinedError)
+
   const displayTranscript = finalTranscript || transcript
 
-  const statusLabel = listening
-    ? 'Listening…'
-    : overlayState === 'analyzing'
-      ? 'Analyzing instruction…'
-      : overlayState === 'routing'
-        ? 'Calculating route…'
-        : overlayState === 'done'
-          ? 'Process completed'
-          : overlayState === 'error'
-            ? 'Error'
-            : 'Voice assistant'
+  const statusLabel = installing
+    ? 'Preparing local speech model…'
+    : listening
+      ? 'Listening locally…'
+      : overlayState === 'analyzing'
+        ? 'Analyzing instruction…'
+        : overlayState === 'routing'
+          ? 'Calculating route…'
+          : overlayState === 'done'
+            ? 'Process completed'
+            : overlayState === 'error'
+              ? 'Error'
+              : 'Voice assistant'
 
   const optionEntries = aiResult?.options
     ? Object.entries(aiResult.options).filter(([, value]) => {
@@ -289,31 +370,60 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
           aria-live="polite"
         >
           <div className="ai-overlay__header">
-            <p className="ai-overlay__state">{statusLabel}</p>
+            <p className="ai-overlay__state">
+              {statusLabel}
+            </p>
+
+            <p className="ai-overlay__speech-mode">
+              {modelReady
+                ? 'en-US · Local recognition'
+                : installing
+                  ? 'Installing en-US model'
+                  : supported
+                    ? 'Local model not ready'
+                    : 'Speech recognition unavailable'}
+            </p>
           </div>
 
           {combinedError && (
-            <p className="ai-overlay__error">{combinedError}</p>
+            <p className="ai-overlay__error">
+              {combinedError}
+            </p>
           )}
 
           <div className="ai-overlay__steps">
             {showTranscript && (
               <div
-                className={`ai-overlay__step ${displayTranscript || interim ? 'is-done' : ''}`}
+                className={`ai-overlay__step ${
+                  displayTranscript || interim ? 'is-done' : ''
+                }`}
               >
-                <div className="ai-overlay__step-title">Transcribed text</div>
+                <div className="ai-overlay__step-title">
+                  Transcribed text
+                </div>
+
                 <p className="ai-overlay__step-body ai-overlay__transcript">
-                  {displayTranscript && <span>{displayTranscript} </span>}
-                  {interim && (
-                    <span className="ai-overlay__interim">{interim}</span>
+                  {displayTranscript && (
+                    <span>{displayTranscript} </span>
                   )}
+
+                  {interim && (
+                    <span className="ai-overlay__interim">
+                      {interim}
+                    </span>
+                  )}
+
                   {listening && !displayTranscript && !interim && (
                     <span className="ai-overlay__placeholder">
                       Speak now…
                     </span>
                   )}
+
                   {listening && (
-                    <span className="ai-overlay__caret" aria-hidden="true" />
+                    <span
+                      className="ai-overlay__caret"
+                      aria-hidden="true"
+                    />
                   )}
                 </p>
               </div>
@@ -324,15 +434,25 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
                 <div className="ai-overlay__step-title">
                   AI interpretation
                 </div>
+
                 <div className="ai-overlay__step-body">
                   <div className="ai-overlay__action">
-                    <span className="ai-overlay__badge">Action</span>
-                    <strong>{formatActionLabel(aiResult.action)}</strong>
+                    <span className="ai-overlay__badge">
+                      Action
+                    </span>
+
+                    <strong>
+                      {formatActionLabel(aiResult.action)}
+                    </strong>
                   </div>
+
                   {optionEntries.length > 0 && (
                     <dl className="ai-overlay__params">
                       {optionEntries.map(([key, value]) => (
-                        <div key={key} className="ai-overlay__param">
+                        <div
+                          key={key}
+                          className="ai-overlay__param"
+                        >
                           <dt>{formatOptionLabel(key)}</dt>
                           <dd>{formatOptionValue(key, value)}</dd>
                         </div>
@@ -345,24 +465,38 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
 
             {actionResult && (
               <div
-                className={`ai-overlay__step ${actionResult.ok ? 'is-done' : 'is-error'}`}
+                className={`ai-overlay__step ${
+                  actionResult.ok ? 'is-done' : 'is-error'
+                }`}
               >
-                <div className="ai-overlay__step-title">Result</div>
+                <div className="ai-overlay__step-title">
+                  Result
+                </div>
+
                 <div className="ai-overlay__step-body">
                   <p className="ai-overlay__confirm">
                     {actionResult.ok ? '✓ ' : '✕ '}
                     {actionResult.message}
                   </p>
+
                   {(actionResult.points != null ||
                     actionResult.distance != null) && (
                     <p className="ai-overlay__meta">
                       {actionResult.points != null && (
-                        <span>{actionResult.points} puntos</span>
+                        <span>
+                          {actionResult.points} puntos
+                        </span>
                       )}
+
                       {actionResult.points != null &&
-                        actionResult.distance != null && <span> · </span>}
+                        actionResult.distance != null && (
+                          <span> · </span>
+                        )}
+
                       {actionResult.distance != null && (
-                        <span>cost {actionResult.distance}</span>
+                        <span>
+                          cost {actionResult.distance}
+                        </span>
                       )}
                     </p>
                   )}
@@ -375,28 +509,40 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
 
       <button
         type="button"
-        className={`ai-overlay__button${listening ? ' is-listening' : ''}${busy ? ' is-busy' : ''}`}
+        className={`ai-overlay__button${
+          listening ? ' is-listening' : ''
+        }${busy ? ' is-busy' : ''}`}
         onClick={() => {
           if (listening) {
             toggle()
-          } else if (showPanel) {
+          } else if (showPanel && !busy) {
             reset()
-          } else {
+          } else if (!busy) {
             toggle()
           }
         }}
         disabled={!supported || busy}
         aria-pressed={listening}
         aria-label={
-          listening ? 'Stop voice dictation' : 'Open voice assistant'
+          listening
+            ? 'Stop voice dictation'
+            : 'Open voice assistant'
         }
         title={
-          supported
-            ? 'Voice assistant'
-            : 'Your browser does not support speech recognition'
+          !supported
+            ? 'Your browser does not support local speech recognition'
+            : installing
+              ? 'Preparing local speech model'
+              : 'Voice assistant · en-US local'
         }
       >
-        {listening && <span className="ai-overlay__pulse" aria-hidden="true" />}
+        {listening && (
+          <span
+            className="ai-overlay__pulse"
+            aria-hidden="true"
+          />
+        )}
+
         <img
           className="ai-overlay__icon"
           src={logoMaya}
