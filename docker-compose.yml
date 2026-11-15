@@ -18,7 +18,7 @@ services:
         condition: service_healthy
     environment:
       - OLLAMA_HOST=http://ollama:11434
-    entrypoint: ["ollama", "pull", "laya:421m-typed-decisions-bf16"]
+    entrypoint: ["ollama", "pull", "d1-omni:latest"]
     restart: "no"
 
   backend:
@@ -29,7 +29,7 @@ services:
       - ./scripts:/app/scripts:ro
       - ./data:/app/data
     environment:
-      - MODEL_OLLAMA=laya:421m-typed-decisions-bf16
+      - MODEL_OLLAMA=d1-omni:latest
       - MESSAGE_FILE=/app/data/message.txt
       - OLLAMA_URL=http://ollama:11434
     depends_on:
