@@ -9,14 +9,37 @@ export type TerrainMeta = {
   colorMax: number
   widthMeters: number
   heightMeters: number
-  sourcePixelSizeMeters: number
+  sourcePixelSizeMeters: number | { x: number; y: number }
+  metersPerPixel?: { x: number; y: number }
   sourceWidth: number
   sourceHeight: number
+  sourceBoundsPx?: { x0: number; y0: number; x1: number; y1: number }
   validRatio: number
   bounds: { latMin: number; latMax: number; lonMin: number; lonMax: number }
   center: { lat: number; lon: number }
   crs: string
   sourceFile: string
+}
+
+export function normalizeTerrainMeta(meta: TerrainMeta): TerrainMeta {
+  const s = meta.sourcePixelSizeMeters
+  const sx = typeof s === 'number' ? s : s.x
+  const sy = typeof s === 'number' ? s : s.y
+  const b = meta.sourceBoundsPx ?? {
+    x0: 0,
+    y0: 0,
+    x1: meta.sourceWidth ?? meta.width,
+    y1: meta.sourceHeight ?? meta.height,
+  }
+  const spanX = Math.max(0, b.x1 - b.x0)
+  const spanY = Math.max(0, b.y1 - b.y0)
+  const widthMeters = spanX * sx
+  const heightMeters = spanY * sy
+  const metersPerPixel = {
+    x: widthMeters / Math.max(1, meta.width - 1),
+    y: heightMeters / Math.max(1, meta.height - 1),
+  }
+  return { ...meta, sourceBoundsPx: b, widthMeters, heightMeters, metersPerPixel }
 }
 
 export type TerrainData = {
@@ -60,7 +83,8 @@ export async function loadTerrain(terrainDir: string): Promise<TerrainData> {
   if (!metaResponse.ok) {
     throw new Error(`No se pudo cargar el metadata (${metaResponse.status})`)
   }
-  const meta = (await metaResponse.json()) as TerrainMeta
+  const rawMeta = (await metaResponse.json()) as TerrainMeta
+  const meta = normalizeTerrainMeta(rawMeta)
 
   const heightResponse = await fetch(`${baseUrl}/mars_height.bin`)
   if (!heightResponse.ok) {

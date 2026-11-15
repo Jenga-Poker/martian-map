@@ -9,7 +9,10 @@
   "colorMax": -3459.19,
   "widthMeters": 11856.0,
   "heightMeters": 17783.0,
-  "sourcePixelSizeMeters": 1.0,
+  "sourcePixelSizeMeters": {
+    "x": 1.0,
+    "y": 1.0
+  },
   "sourceWidth": 11856,
   "sourceHeight": 17783,
   "sourceBoundsPx": {

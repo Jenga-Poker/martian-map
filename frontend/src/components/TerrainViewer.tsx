@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { MARS_PALETTE, type HoverInfo } from '../utils/terrain'
 import type { TerrainModel } from '../utils/terrainModel'
+import { renderRouteOnObject, type DemPixel } from '../utils/pathy'
 
 export type CameraMode = 'perspective' | 'top'
 
@@ -23,6 +24,9 @@ type Props = {
   onError: (message: string) => void
   astronaut: AstronautPosition | null
   onAstronautSelect?: (position: AstronautPosition) => void
+  routes?: DemPixel[][]
+  routeColors?: Array<number | string>
+  selectedRouteIndex?: number | null
 }
 
 type SceneApi = {
@@ -32,10 +36,16 @@ type SceneApi = {
   applyCameraMode: (mode: CameraMode) => void
   reset: () => void
   setAstronaut: (position: AstronautPosition | null) => void
+  setRoutes: (
+    routes: DemPixel[][],
+    colors?: Array<number | string>,
+    selectedIndex?: number | null,
+  ) => void
 }
 
 const BASE_EXAGGERATION = 3.5
 const CAMERA_FOV = 42
+const REFERENCE_ELEVATION_SPAN = 1000 // meters, used to keep vertical exaggeration consistent across terrains
 
 const clamp01 = (value: number) => (value < 0 ? 0 : value > 1 ? 1 : value)
 
@@ -71,6 +81,9 @@ export default function TerrainViewer({
   onError,
   astronaut,
   onAstronautSelect,
+  routes,
+  routeColors,
+  selectedRouteIndex,
 }: Props) {
   const mountRef = useRef<HTMLDivElement>(null)
   const apiRef = useRef<SceneApi | null>(null)
@@ -80,6 +93,9 @@ export default function TerrainViewer({
   const onErrorRef = useRef(onError)
   const onAstronautSelectRef = useRef(onAstronautSelect)
   const astronautRef = useRef(astronaut)
+  const routesRef = useRef<DemPixel[][]>(routes ?? [])
+  const routeColorsRef = useRef<Array<number | string> | undefined>(routeColors)
+  const selectedRouteIndexRef = useRef<number | null>(selectedRouteIndex ?? null)
 
   useEffect(() => {
     onHoverRef.current = onHover
@@ -88,6 +104,9 @@ export default function TerrainViewer({
     cameraModeRef.current = cameraMode
     onAstronautSelectRef.current = onAstronautSelect
     astronautRef.current = astronaut
+    routesRef.current = routes ?? []
+    routeColorsRef.current = routeColors
+    selectedRouteIndexRef.current = selectedRouteIndex ?? null
   })
 
   useEffect(() => {
@@ -98,6 +117,8 @@ export default function TerrainViewer({
     const count = meta.width * meta.height
     const spacingX = widthKm / (meta.width - 1)
     const spacingZ = heightKm / (meta.height - 1)
+    const spanFactor = REFERENCE_ELEVATION_SPAN / (model.elevationSpan || REFERENCE_ELEVATION_SPAN)
+    const effectiveExaggeration = (value: number) => value / spanFactor
 
     const colorArray = new Float32Array(count * 4)
     const color = { r: 0, g: 0, b: 0 }
@@ -160,13 +181,19 @@ export default function TerrainViewer({
     mount.appendChild(renderer.domElement)
 
     const scene = new THREE.Scene()
-    const camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 0.05, 600)
+    const maxDimension = Math.max(widthKm, heightKm)
+    const camera = new THREE.PerspectiveCamera(
+      CAMERA_FOV,
+      1,
+      Math.max(0.05, maxDimension / 10000),
+      Math.max(600, maxDimension * 12),
+    )
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
     controls.dampingFactor = 0.06
     controls.autoRotateSpeed = 0.55
-    controls.minDistance = 2.5
-    controls.maxDistance = Math.max(widthKm, heightKm) * 4.5
+    controls.minDistance = Math.max(2.5, maxDimension * 0.01)
+    controls.maxDistance = maxDimension * 6
     controls.minPolarAngle = 0.04
     controls.maxPolarAngle = Math.PI * 0.494
 
@@ -180,8 +207,9 @@ export default function TerrainViewer({
 
     const positions = geometry.attributes.position as THREE.BufferAttribute
     const positionArray = positions.array as Float32Array
+    const initialExaggeration = effectiveExaggeration(exaggerationRef.current)
     for (let i = 0; i < count; i += 1) {
-      positionArray[i * 3 + 1] = baseHeights[i] * BASE_EXAGGERATION
+      positionArray[i * 3 + 1] = baseHeights[i] * initialExaggeration
     }
     positions.needsUpdate = true
     geometry.setAttribute('color', new THREE.BufferAttribute(colorArray, 4))
@@ -218,12 +246,12 @@ export default function TerrainViewer({
 
     const marker = new THREE.Group()
     marker.visible = false
-    const markerColor = new THREE.Color(MARS_PALETTE[MARS_PALETTE.length - 1])
+    const markerColor = new THREE.Color(0xffffff)
     const markerMat = new THREE.MeshStandardMaterial({
       color: markerColor,
-      emissive: new THREE.Color(MARS_PALETTE[3]),
-      emissiveIntensity: 0.35,
-      roughness: 0.4,
+      emissive: new THREE.Color(0xffffff),
+      emissiveIntensity: 0.15,
+      roughness: 0.35,
       metalness: 0.05,
     })
     const markerPole = new THREE.Mesh(
@@ -245,6 +273,39 @@ export default function TerrainViewer({
     marker.add(markerBase, markerPole, markerHead)
     scene.add(marker)
 
+    const routeGroup = new THREE.Group()
+    routeGroup.name = 'routes'
+    scene.add(routeGroup)
+
+    const defaultRouteColors = [0xff0000, 0xffff00, 0x00ff00, 0x38bdf8, 0xe879f9]
+    const drawRoutes = (
+      paths: DemPixel[][],
+      colors?: Array<number | string>,
+      selectedIndex: number | null = null,
+    ) => {
+      while (routeGroup.children.length > 0) {
+        const child = routeGroup.children[0]
+        routeGroup.remove(child)
+        const anyChild = child as any
+        anyChild.geometry?.dispose?.()
+        anyChild.material?.dispose?.()
+      }
+      const baseRadius = Math.max(0.004, Math.max(model.widthKm, model.heightKm) * 0.0007)
+      paths.forEach((path, index) => {
+        const color = colors?.[index] ?? defaultRouteColors[index % defaultRouteColors.length]
+        const isSelected = selectedIndex === index
+        const dimmed = selectedIndex != null && !isSelected
+        renderRouteOnObject(routeGroup, model, path, {
+          exaggeration: effectiveExaggeration(exaggerationRef.current),
+          color,
+          yOffset: (isSelected ? 0.02 : 0.012) + index * 0.002,
+          opacity: dimmed ? 0.25 : 1,
+          radius: isSelected ? baseRadius * 1.8 : baseRadius,
+          name: `route-line-${index}`,
+        })
+      })
+    }
+
     const pickTerrain = (clientX: number, clientY: number) => {
       const rect = renderer.domElement.getBoundingClientRect()
       if (rect.width === 0 || rect.height === 0) return null
@@ -255,13 +316,13 @@ export default function TerrainViewer({
       const entry = ray.intersectBox(terrainBox, rayA)
       if (!entry) return null
       const tStart = ray.origin.distanceTo(entry)
-      const marchLength = Math.max(40, camera.position.distanceTo(entry) + 12)
+      const marchLength = Math.max(maxDimension * 0.02, camera.position.distanceTo(entry) + maxDimension * 0.02)
       const steps = 320
       let previousT = tStart
       for (let step = 1; step <= steps; step += 1) {
         const t = tStart + (marchLength * step) / steps
         ray.at(t, rayC)
-        const current = model.sampleAt(rayC.x, rayC.z, exaggerationRef.current, sample)
+        const current = model.sampleAt(rayC.x, rayC.z, effectiveExaggeration(exaggerationRef.current), sample)
         if (current && rayC.y <= current.y) {
           let lo = previousT
           let hi = t
@@ -269,7 +330,7 @@ export default function TerrainViewer({
           for (let iteration = 0; iteration < 12; iteration += 1) {
             const midT = (lo + hi) / 2
             ray.at(midT, rayA)
-            const refined = model.sampleAt(rayA.x, rayA.z, exaggerationRef.current, midSample)
+            const refined = model.sampleAt(rayA.x, rayA.z, effectiveExaggeration(exaggerationRef.current), midSample)
             if (refined && rayA.y <= refined.y) {
               hi = midT
               hit = refined
@@ -292,7 +353,7 @@ export default function TerrainViewer({
         return
       }
       const { x, z } = model.geoToWorld(pos)
-      const sampled = model.sampleAt(x, z, exaggerationRef.current, sample)
+      const sampled = model.sampleAt(x, z, effectiveExaggeration(exaggerationRef.current), sample)
       if (!sampled) {
         marker.visible = false
         return
@@ -301,13 +362,14 @@ export default function TerrainViewer({
       marker.visible = true
     }
     updateMarker(astronautRef.current)
+    drawRoutes(routesRef.current, routeColorsRef.current)
 
+    const boxPad = Math.max(1, maxDimension * 0.02)
+    const boxY = Math.max(12, maxDimension * 0.25)
     const terrainBox = new THREE.Box3(
-      new THREE.Vector3(-widthKm / 2 - 1, -12, -heightKm / 2 - 1),
-      new THREE.Vector3(widthKm / 2 + 1, 12, heightKm / 2 + 1),
+      new THREE.Vector3(-widthKm / 2 - boxPad, -boxY, -heightKm / 2 - boxPad),
+      new THREE.Vector3(widthKm / 2 + boxPad, boxY, heightKm / 2 + boxPad),
     )
-
-    const maxDimension = Math.max(widthKm, heightKm)
     const presets: Record<CameraMode, { position: THREE.Vector3; target: THREE.Vector3 }> = {
       perspective: {
         position: new THREE.Vector3(
@@ -387,7 +449,7 @@ export default function TerrainViewer({
       }
 
       const tStart = ray.origin.distanceTo(entry)
-      const marchLength = Math.max(40, camera.position.distanceTo(entry) + 12)
+      const marchLength = Math.max(maxDimension * 0.02, camera.position.distanceTo(entry) + maxDimension * 0.02)
       const steps = 320
       let previousT = tStart
 
@@ -397,7 +459,7 @@ export default function TerrainViewer({
         const current = model.sampleAt(
           rayC.x,
           rayC.z,
-          exaggerationRef.current,
+          effectiveExaggeration(exaggerationRef.current),
           sample,
         )
         if (current && rayC.y <= current.y) {
@@ -410,7 +472,7 @@ export default function TerrainViewer({
             const refined = model.sampleAt(
               rayA.x,
               rayA.z,
-              exaggerationRef.current,
+              effectiveExaggeration(exaggerationRef.current),
               midSample,
             )
             if (refined && rayA.y <= refined.y) {
@@ -507,8 +569,9 @@ export default function TerrainViewer({
     apiRef.current = {
       setExaggeration: (value: number) => {
         exaggerationRef.current = value
-        terrain.scale.y = value / BASE_EXAGGERATION
+        terrain.scale.y = effectiveExaggeration(value) / initialExaggeration
         updateMarker(astronautRef.current)
+        drawRoutes(routesRef.current, routeColorsRef.current, selectedRouteIndexRef.current)
       },
       setAutoRotate: (value: boolean) => {
         controls.autoRotate = value
@@ -525,6 +588,16 @@ export default function TerrainViewer({
       setAstronaut: (position: AstronautPosition | null) => {
         astronautRef.current = position
         updateMarker(position)
+      },
+      setRoutes: (
+        paths: DemPixel[][],
+        colors?: Array<number | string>,
+        selectedIndex: number | null = null,
+      ) => {
+        routesRef.current = paths
+        routeColorsRef.current = colors
+        selectedRouteIndexRef.current = selectedIndex
+        drawRoutes(paths, colors, selectedIndex)
       },
     }
 
@@ -547,6 +620,13 @@ export default function TerrainViewer({
       markerBase.geometry.dispose()
       markerMat.dispose()
       ;(markerBase.material as THREE.Material).dispose()
+      while (routeGroup.children.length > 0) {
+        const child = routeGroup.children[0]
+        routeGroup.remove(child)
+        const anyChild = child as any
+        anyChild.geometry?.dispose?.()
+        anyChild.material?.dispose?.()
+      }
       renderer.dispose()
       if (renderer.domElement.parentElement === mount) {
         mount.removeChild(renderer.domElement)
@@ -579,12 +659,16 @@ export default function TerrainViewer({
     apiRef.current?.setAstronaut(astronaut)
   }, [astronaut])
 
+  useEffect(() => {
+    apiRef.current?.setRoutes(routes ?? [], routeColors, selectedRouteIndex ?? null)
+  }, [routes, routeColors, selectedRouteIndex])
+
   return (
     <div
       className="stage"
       ref={mountRef}
       role="img"
-      aria-label="Modelo 3D del relieve de Marte"
+      aria-label="3D model of Martian terrain"
     />
   )
 }

@@ -379,22 +379,4 @@ def shortest_path(
             f"{len(path)} puntos, variación de altura={total_height_variation:.3f}",
         )
 
-    # Compatibilidad con el formato anterior de una sola ruta:
-    # los campos principales representan la primera ruta, mientras que
-    # "routes" contiene las tres rutas calculadas.
-    primary_route = routes[0]
-    return {
-        "zone": dem_path.name,
-        "start": {"lat": start_geo[0], "lon": start_geo[1], "row": start_pt[0], "col": start_pt[1]},
-        "end": {"lat": end_geo[0], "lon": end_geo[1], "row": end_pt[0], "col": end_pt[1]},
-        "points": primary_route["points"],
-        "total_cost": primary_route["total_cost"],
-        "path": primary_route["path"],
-        "heights": primary_route["heights"],
-        "total_height_variation": primary_route["total_height_variation"],
-        "height_multiplier": primary_route["height_multiplier"],
-        "routes": routes,
-        "max_height_diff": max_height_diff,
-        "sample_stride": stride,
-        "grid_shape": [grid_h, grid_w],
-    }
+    return routes

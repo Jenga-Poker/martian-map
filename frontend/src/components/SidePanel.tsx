@@ -20,7 +20,7 @@ export default function SidePanel({
   onBack,
   onClose,
   onGo,
-  actionLabel = "Ir",
+  actionLabel = "Go",
   children,
   className = "",
   headerExtra,
@@ -37,7 +37,7 @@ export default function SidePanel({
             type="button"
             className="side-panel__close"
             onClick={backHandler}
-            aria-label={onBack ? "Volver a la vista general" : "Cerrar panel"}
+            aria-label={onBack ? "Back" : "Close panel"}
           >
             <span
               className="side-panel__close-icon"

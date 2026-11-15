@@ -11,6 +11,12 @@ import Button from './../components/Button'
 import AIOverlay from './../components/AIOverlay'
 import { getPoi } from './../data/pois'
 import {
+  ROUTE_VELOCITY_MPS,
+  getRouteDurationSeconds,
+  getRouteLengthMeters,
+  parseResultExample,
+} from './../utils/pathy'
+import {
   MARS_PALETTE,
   formatCoord,
   formatMeters,
@@ -37,6 +43,7 @@ export default function Partial() {
   const [hover, setHover] = useState<HoverInfo | null>(null)
   const [panelOpen, setPanelOpen] = useState(true)
   const [astronaut, setAstronaut] = useState<AstronautPosition | null>(null)
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState<number | null>(null)
 
   useEffect(() => {
     setAstronaut(null)
@@ -56,7 +63,7 @@ export default function Partial() {
         setError(
           cause instanceof Error
             ? cause.message
-            : 'No se pudo cargar el modelo de elevación.',
+            : 'Could not load the elevation model.',
         )
       })
     return () => {
@@ -69,12 +76,33 @@ export default function Partial() {
     [data],
   )
 
+  const demoRouteData = useMemo(() => parseResultExample(), [])
+  const demoRoutes = useMemo(() => demoRouteData.map((r) => r.path), [demoRouteData])
+  const routeColors = ['#ff0000', '#ffff00', '#00ff00']
+  const routeNames = ['Dangerous', 'Medium', 'Slow']
+
+  const formatDuration = (seconds: number): string => {
+    if (!Number.isFinite(seconds) || seconds < 0) return '—'
+    const h = Math.floor(seconds / 3600)
+    const m = Math.floor((seconds % 3600) / 60)
+    const s = Math.round(seconds % 60)
+    if (h > 0) return `${h} h ${m} min`
+    if (m > 0) return `${m} min ${s} s`
+    return `${s} s`
+  }
+
+  const formatLength = (meters: number): string => {
+    if (!Number.isFinite(meters)) return '—'
+    if (meters >= 1000) return `${(meters / 1000).toFixed(2)} km`
+    return `${Math.round(meters)} m`
+  }
+
   const meta = data?.meta
   const area = useMemo(() => {
     if (!meta) return null
     return {
-      width: (meta.widthMeters / 1000).toFixed(1).replace('.', ','),
-      height: (meta.heightMeters / 1000).toFixed(1).replace('.', ','),
+      width: (meta.widthMeters / 1000).toFixed(1),
+      height: (meta.heightMeters / 1000).toFixed(1),
     }
   }, [meta])
 
@@ -97,23 +125,26 @@ export default function Partial() {
             onAstronautSelect={(position) => {
               setAstronaut(position)
             }}
+            routes={demoRoutes}
+            routeColors={routeColors}
+            selectedRouteIndex={selectedRouteIndex}
           />
         )}
       </div>
       {!data && !error && (
         <Loading
-          title="Procesando el relieve de Marte"
-          subtitle={`${poi.name} · 1024 × 1024 muestras del DEM · 1 m/px`}
+          title="Processing Martian terrain"
+          subtitle={`${poi.name} · 1024 × 1024 DEM samples · 1 m/px`}
         />
       )}
       {error && (
         <div className="partial-error" role="alert">
-          <p className="partial-error-eyebrow">No se pudo abrir el visor</p>
+          <p className="partial-error-eyebrow">Could not open viewer</p>
           <h2>{error}</h2>
           <p>
-            Comprueba que el modelo exista en{' '}
-            <code>frontend/public/terrain/{poi.terrainDir}</code> y recarga la
-            página.
+            Check that the model exists in{' '}
+            <code>frontend/public/terrain/{poi.terrainDir}</code> and reload the
+            page.
           </p>
         </div>
       )}
@@ -123,8 +154,8 @@ export default function Partial() {
           <button
             type="button"
             onClick={() => setResetSignal((signal) => signal + 1)}
-            aria-label="Centrar vista"
-            title="Centrar vista"
+            aria-label="Reset view"
+            title="Reset view"
             style={{
               position: 'absolute',
               right: '1rem',
@@ -160,28 +191,174 @@ export default function Partial() {
 
           <div className={`partial-left-group${panelOpen ? ' partial-left-group--open' : ''}`}>
             <SidePanel
-              title="Panel"
+              title="Routes"
               open={panelOpen}
               onBack={() => setPanelOpen(false)}
               className="side-panel--terrain"
-            />
+            >
+              <div style={{ display: 'grid', gap: '1rem' }}>
+                {(() => {
+                  const allHeights = demoRouteData.flatMap((r) => r.heights ?? [])
+                  const gMin = allHeights.length ? Math.min(...allHeights) : 0
+                  const gMax = allHeights.length ? Math.max(...allHeights) : 1
+                  const pad = (gMax - gMin) * 0.08 || 1
+                  const minY = gMin - pad
+                  const maxY = gMax + pad
+                  const W = 260
+                  const H = 120
+                  const toX = (i: number, n: number) => (n <= 1 ? 0 : (i / (n - 1)) * W)
+                  const toY = (v: number) => H - ((v - minY) / (maxY - minY || 1)) * H
+                  return (
+                    <>
+                      <div>
+                        <div
+                          style={{
+                            fontSize: '0.8rem',
+                            fontWeight: 700,
+                            color: 'var(--tangerine-dream)',
+                            marginBottom: '0.35rem',
+                          }}
+                        >
+                          Elevation profile
+                        </div>
+                        <svg
+                          viewBox={`0 0 ${W} ${H}`}
+                          width="100%"
+                          height="120"
+                          role="img"
+                          aria-label="Route elevation profile"
+                          style={{
+                            display: 'block',
+                            background: 'var(--superficie)',
+                            border: '2px solid var(--burnt-rose-2)',
+                            borderRadius: '10px',
+                          }}
+                        >
+                          {[0, 0.25, 0.5, 0.75, 1].map((t) => {
+                            const y = H - t * H
+                            return (
+                              <line
+                                key={t}
+                                x1={0}
+                                y1={y}
+                                x2={W}
+                                y2={y}
+                                stroke="var(--burnt-rose-2)"
+                                strokeWidth={1}
+                                opacity={0.7}
+                              />
+                            )
+                          })}
+                          {demoRouteData.map((route, index) => {
+                            const heights = route.heights ?? []
+                            if (heights.length < 2) return null
+                            const color = routeColors[index] ?? '#38bdf8'
+                            const isSelected = selectedRouteIndex === index
+                            const dimmed = selectedRouteIndex != null && !isSelected
+                            const pts = heights.map((h, i) => `${toX(i, heights.length)},${toY(h)}`).join(' ')
+                            const area = `${pts} ${W},${H} 0,${H}`
+                            return (
+                              <g key={index} opacity={dimmed ? 0.25 : 1}>
+                                <polygon points={area} fill={color} opacity={isSelected ? 0.28 : 0.18} />
+                                <polyline
+                                  points={pts}
+                                  fill="none"
+                                  stroke={color}
+                                  strokeWidth={isSelected ? 3 : 2}
+                                  strokeLinejoin="round"
+                                  strokeLinecap="round"
+                                />
+                              </g>
+                            )
+                          })}
+                        </svg>
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            fontSize: '0.7rem',
+                            color: 'var(--texto)',
+                            marginTop: '0.25rem',
+                            fontVariantNumeric: 'tabular-nums',
+                          }}
+                        >
+                          <span>{formatMeters(gMin)}</span>
+                          <span>{formatMeters(gMax)}</span>
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gap: '0.5rem' }}>
+                        {demoRouteData.map((route, index) => {
+                          const heights = route.heights ?? []
+                          const color = routeColors[index] ?? '#38bdf8'
+                          const isSelected = selectedRouteIndex === index
+                          const dimmed = selectedRouteIndex != null && !isSelected
+                          const lengthMeters = model ? getRouteLengthMeters(model, route.path) : 0
+                          const durationSeconds = getRouteDurationSeconds(lengthMeters, ROUTE_VELOCITY_MPS)
+                          const name = routeNames[index] ?? `Route ${index + 1}`
+                          return (
+                            <button
+                              key={index}
+                              type="button"
+                              onClick={() => setSelectedRouteIndex(isSelected ? null : index)}
+                              className={`btn${isSelected ? ' btn--active' : ''}`}
+                              style={{
+                                display: 'grid',
+                                gap: '0.2rem',
+                                textAlign: 'left',
+                                padding: '0.55rem 0.7rem',
+                                textTransform: 'none',
+                                fontWeight: 600,
+                                opacity: dimmed ? 0.45 : 1,
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--acento)' }}>
+                                <span
+                                  aria-hidden="true"
+                                  style={{
+                                    width: '0.7rem',
+                                    height: '0.7rem',
+                                    borderRadius: '999px',
+                                    background: color,
+                                    border: '1px solid var(--burnt-rose-2)',
+                                    display: 'inline-block',
+                                    flex: 'none',
+                                  }}
+                                />
+                                <span>{name}</span>
+                              </div>
+                              <div style={{ fontSize: '0.78rem', color: 'var(--texto)', fontWeight: 400 }}>
+                                <div>Total length: {formatLength(lengthMeters)}</div>
+                                <div>Estimated time: {formatDuration(durationSeconds)}</div>
+                                {route.total_height_variation != null && (
+                                  <div>Total elevation change: {formatMeters(route.total_height_variation)}</div>
+                                )}
+                              </div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </>
+                  )
+                })()}
+              </div>
+            </SidePanel>
             <header className="partial-header">
-              <p className="partial-eyebrow">{poi.terrainLabel}</p>
+              <p className="partial-eyebrow">{poi.terrainLabel.replace('Marte ·', 'Mars ·')}</p>
               <dl className="partial-facts">
                 <div>
-                  <dt>Área</dt>
+                  <dt>Area</dt>
                   <dd>
                     {area?.width} × {area?.height} km
                   </dd>
                 </div>
                 <div>
-                  <dt>Elevación</dt>
+                  <dt>Elevation</dt>
                   <dd>
                     {formatMeters(meta.minElevation)} / {formatMeters(meta.maxElevation)}
                   </dd>
                 </div>
                 <div>
-                  <dt>Centro</dt>
+                  <dt>Center</dt>
                   <dd>
                     {formatCoord(meta.center.lat, 'N', 'S')} ·{' '}
                     {formatCoord(meta.center.lon, 'E', 'W')}
@@ -192,7 +369,7 @@ export default function Partial() {
           </div>
 
           <figure className="partial-legend">
-            <figcaption>Elevación</figcaption>
+            <figcaption>Elevation</figcaption>
             <div className="partial-legend__body">
               <div
                 className="partial-legend__bar"
@@ -218,14 +395,14 @@ export default function Partial() {
             ) : (
               <span className="partial-readout__idle">
                 {astronaut
-                  ? 'Pasa el cursor sobre el relieve para leer la altura'
-                  : 'Selecciona en el relieve la posición inicial del astronauta'}
+                  ? 'Hover over the terrain to read elevation'
+                  : 'Click on the terrain to set the astronaut starting position'}
               </span>
             )}
           </div>
 
           <p className="partial-source">
-            Fuente: {meta.sourceFile} · {meta.crs}
+            Source: {meta.sourceFile} · {meta.crs}
           </p>
         </>
       )}
