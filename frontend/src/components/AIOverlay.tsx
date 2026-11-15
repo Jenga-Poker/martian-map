@@ -31,14 +31,18 @@ function formatValue(value: any): string {
 
 function formatActionLabel(action: string): string {
   const map: Record<string, string> = {
-    generate_path: 'Generar ruta',
+    navigate_to: 'Generar ruta',
     find_path: 'Buscar ruta',
     calculate_route: 'Calcular ruta',
   }
   return map[action] || action.replace(/_/g, ' ')
 }
 
-export default function AIOverlay() {
+type AIOverlayProps = {
+  zone?: string
+}
+
+export default function AIOverlay({ zone }: AIOverlayProps) {
   const [overlayState, setOverlayState] = useState<OverlayState>('idle')
   const [error, setError] = useState<string | null>(null)
   const [finalTranscript, setFinalTranscript] = useState('')
@@ -61,7 +65,7 @@ export default function AIOverlay() {
       const response = await fetch('http://localhost:8000/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ instruction }),
+        body: JSON.stringify({ instruction, zone }),
         signal: controller.signal,
       })
       if (!response.ok) {
@@ -124,7 +128,7 @@ export default function AIOverlay() {
     } finally {
       if (abortRef.current === controller) abortRef.current = null
     }
-  }, [])
+  }, [zone])
 
   const { status: speechStatus, transcript, interim, error: speechError, supported, toggle, reset: resetSpeech } =
     useSpeechToText({

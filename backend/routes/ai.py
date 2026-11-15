@@ -8,6 +8,7 @@ router = APIRouter(tags=["ai"])
 
 class AIRequest(BaseModel):
     instruction: str
+    zone: str | None = None
 
 
 @router.post("/ai")
@@ -17,7 +18,8 @@ async def ai_endpoint(request: AIRequest):
         raise HTTPException(status_code=400, detail="La instrucción no puede estar vacía.")
 
     try:
-        result = await interpret_instruction(request.instruction)
+        zone = request.zone.strip() if isinstance(request.zone, str) else None
+        result = await interpret_instruction(request.instruction, zone=zone or None)
         return result
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
