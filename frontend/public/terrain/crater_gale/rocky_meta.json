@@ -1,0 +1,21 @@
+{
+  "width": 1024,
+  "height": 1024,
+  "dtype": "uint8",
+  "nodata": 255,
+  "rockyMin": 0,
+  "rockyMax": 254,
+  "sourceFile": "rocky_gale_themis_night.tif",
+  "sourceResolutionDegrees": [
+    0.001686656671664168,
+    0.0016867469879518072
+  ],
+  "bounds": {
+    "lonMin": 137.3499964227555,
+    "lonMax": 137.5500143139533,
+    "latMin": -4.7500044193179285,
+    "latMax": -4.449994453126066
+  },
+  "coverage": 1.0,
+  "rockyRatio": 0.9386
+}

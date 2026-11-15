@@ -15,7 +15,6 @@ import { getPoi } from './../data/pois'
 import {
   getRouteDurationSeconds,
   getRouteLengthMeters,
-  parseResultExample,
   type RouteData,
 } from './../utils/pathy'
 import { DEFAULT_ROVER_ID, ROVERS, getRover } from './../utils/rovy'
@@ -828,6 +827,12 @@ export default function Partial() {
                   </dd>
                 </div>
               </dl>
+              {model?.rocky && (
+                <p className="partial-rocky">
+                  <span className="partial-rocky__swatch" aria-hidden="true" />
+                  Terreno rocoso · THEMIS
+                </p>
+              )}
             </header>
           </div>
 

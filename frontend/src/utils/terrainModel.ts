@@ -17,6 +17,7 @@ export type GeoProjection = {
 export type TerrainModel = GeoProjection & {
   meta: TerrainMeta
   heights: Uint16Array
+  rocky: Uint8Array | null
   midElevation: number
   elevationSpan: number
   qToMeters: number
@@ -65,7 +66,7 @@ export function createGeoProjection(meta: TerrainMeta): GeoProjection {
   return { widthKm, heightKm, geoToWorld, worldToGeo, geoToGrid, gridToGeo }
 }
 
-export function createTerrainModel({ meta, heights }: TerrainData): TerrainModel {
+export function createTerrainModel({ meta, heights, rocky }: TerrainData): TerrainModel {
   const projection = createGeoProjection(meta)
   const midElevation = (meta.minElevation + meta.maxElevation) / 2
   const elevationSpan = meta.maxElevation - meta.minElevation || 1
@@ -137,6 +138,7 @@ export function createTerrainModel({ meta, heights }: TerrainData): TerrainModel
     ...projection,
     meta,
     heights,
+    rocky,
     midElevation,
     elevationSpan,
     qToMeters,

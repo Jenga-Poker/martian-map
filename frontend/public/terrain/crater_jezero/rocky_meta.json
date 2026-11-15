@@ -1,0 +1,21 @@
+{
+  "width": 1024,
+  "height": 1024,
+  "dtype": "uint8",
+  "nodata": 255,
+  "rockyMin": 0,
+  "rockyMax": 254,
+  "sourceFile": "rocky_jezero_themis_night.tif",
+  "sourceResolutionDegrees": [
+    0.0016858237547892742,
+    0.0016869728209934402
+  ],
+  "bounds": {
+    "lonMin": 77.2999979999633,
+    "lonMax": 77.5834747733942,
+    "latMin": 18.30696815573515,
+    "latMax": 18.60001056212061
+  },
+  "coverage": 1.0,
+  "rockyRatio": 0.0556
+}

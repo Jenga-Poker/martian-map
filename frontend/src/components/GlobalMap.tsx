@@ -85,6 +85,76 @@ function createSunTextures() {
   return { coronaTex, haloTex, raysTex };
 }
 
+
+/**
+ * Subtle, sun-lit atmospheric scattering for Mars.
+ * A thin back-face shell keeps the glow outside the visible surface.
+ */
+function createMarsAtmosphere() {
+  const geometry = new THREE.SphereGeometry(1.022, 128, 128);
+
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      uCameraPosition: { value: new THREE.Vector3() },
+      uSunDirection: { value: new THREE.Vector3() },
+      uAtmosphereColor: { value: new THREE.Color(0xff8758) },
+      uIntensity: { value: 0.42 },
+    },
+    vertexShader: `
+      varying vec3 vWorldNormal;
+      varying vec3 vWorldPosition;
+
+      void main() {
+        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+        vWorldPosition = worldPosition.xyz;
+        vWorldNormal = normalize(mat3(modelMatrix) * normal);
+        gl_Position = projectionMatrix * viewMatrix * worldPosition;
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 uCameraPosition;
+      uniform vec3 uSunDirection;
+      uniform vec3 uAtmosphereColor;
+      uniform float uIntensity;
+
+      varying vec3 vWorldNormal;
+      varying vec3 vWorldPosition;
+
+      void main() {
+        vec3 normal = normalize(vWorldNormal);
+        vec3 viewDirection = normalize(uCameraPosition - vWorldPosition);
+        vec3 sunDirection = normalize(uSunDirection);
+
+        // The absolute value is important on a back-face shell:
+        // it makes the scattering strongest at the planetary limb.
+        float viewCosine = abs(dot(normal, viewDirection));
+        float limb = pow(1.0 - clamp(viewCosine, 0.0, 1.0), 2.2);
+
+        // Fade the atmosphere naturally across the day/night terminator.
+        float sunCosine = dot(normal, sunDirection);
+        float sunlight = smoothstep(-0.22, 0.62, sunCosine);
+
+        // Slightly warmer/brighter where sunlight grazes the atmosphere.
+        float glow = limb * sunlight * uIntensity;
+        vec3 color = uAtmosphereColor * (0.72 + 0.28 * sunlight);
+
+        gl_FragColor = vec4(color, clamp(glow, 0.0, 0.38));
+      }
+    `,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    side: THREE.BackSide,
+    depthWrite: false,
+    depthTest: true,
+    toneMapped: false,
+  });
+
+  const atmosphere = new THREE.Mesh(geometry, material);
+  atmosphere.renderOrder = 2;
+
+  return { atmosphere, material, geometry };
+}
+
 function latLonToVector3(lat: number, lon: number, radius: number) {
   const phi = (90 - lat) * (Math.PI / 180);
   const theta = (lon + 180) * (Math.PI / 180);
@@ -219,6 +289,11 @@ const GlobalMap = forwardRef<GlobalMapHandle, GlobalMapProps>(function GlobalMap
     const globeMat = new THREE.MeshLambertMaterial({ color: 0x8a3a22 });
     const globe = new THREE.Mesh(globeGeo, globeMat);
     scene.add(globe);
+
+    // Thin, sun-dependent atmospheric scattering around Mars.
+    const { atmosphere, material: atmosphereMat, geometry: atmosphereGeo } =
+      createMarsAtmosphere();
+    scene.add(atmosphere);
 
     const textureLoader = new THREE.TextureLoader();
     textureLoader.load(
@@ -373,6 +448,12 @@ const GlobalMap = forwardRef<GlobalMapHandle, GlobalMapProps>(function GlobalMap
       sun.position.copy(rearSunPos).lerp(sunPos, sunPositionBlend);
       sunGroup.position.copy(sun.position);
 
+      // Keep atmospheric scattering aligned with the camera and moving Sun.
+      camera.getWorldPosition(atmosphereMat.uniforms.uCameraPosition.value);
+      atmosphereMat.uniforms.uSunDirection.value
+        .copy(sun.position)
+        .normalize();
+
       const t = performance.now() * 0.003;
       for (const m of markers) {
         if ((m as THREE.Mesh).geometry instanceof THREE.RingGeometry) {
@@ -407,6 +488,8 @@ const GlobalMap = forwardRef<GlobalMapHandle, GlobalMapProps>(function GlobalMap
       renderer.dispose();
       globeGeo.dispose();
       globeMat.dispose();
+      atmosphereGeo.dispose();
+      atmosphereMat.dispose();
       
       coronaTex.dispose();
       coronaMat.dispose();
