@@ -202,7 +202,7 @@ def _astar_grid(
         multiplier = float(multiplier)
 
         def edge_weight(u, v, data, factor=multiplier):
-            return data["dist_m"] * (1.0 + factor * data["slope_sq"])
+            return data["dist_m"] * (1.0 + factor * data["slope_sq"])*pixel_size
 
         try:
             path = nx.astar_path(

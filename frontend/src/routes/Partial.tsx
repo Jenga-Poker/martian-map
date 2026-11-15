@@ -5,6 +5,7 @@ import TerrainViewer, {
   type CameraMode,
 } from './../components/TerrainViewer'
 import SidePanel from './../components/SidePanel'
+import Cabecera from './../components/Cabecera'
 import Loading from './../components/Loading'
 import discIcon from './../assets/disc-outline.svg'
 import AIOverlay, {
@@ -15,7 +16,6 @@ import { getPoi } from './../data/pois'
 import {
   getRouteDurationSeconds,
   getRouteLengthMeters,
-  parseResultExample,
   type RouteData,
 } from './../utils/pathy'
 import { DEFAULT_ROVER_ID, ROVERS, getRover } from './../utils/rovy'
@@ -542,6 +542,7 @@ export default function Partial() {
   return (
     <main className="partial-app">
       <div className="partial-stage">
+      <Cabecera />
         {model && (
           <TerrainViewer
             model={model}

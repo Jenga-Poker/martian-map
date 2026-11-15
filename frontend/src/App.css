@@ -467,6 +467,7 @@
 .partial-header {
   position: relative;
   top: 0;
+  visibility: hidden;
   left: auto;
   right: auto;
   z-index: 5;
