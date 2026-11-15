@@ -125,16 +125,9 @@ export default function Partial() {
     setSelectedRouteIndex(null)
     setRouteChosen(false)
     setRouteEnd(null)
-    try {
-      const premade = parseResultExample()
-      setRouteData(premade)
-      setRouteDestination('Example route')
-      setRouteStart(null)
-    } catch {
-      setRouteData([])
-      setRouteDestination(null)
-      setRouteStart(null)
-    }
+    setRouteData([])
+    setRouteDestination(null)
+    setRouteStart(null)
   }, [poi.id])
 
   useEffect(() => {
