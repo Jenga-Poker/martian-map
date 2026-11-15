@@ -117,12 +117,13 @@
   --side-panel-width: 20rem;
   position: fixed;
   top: 6rem;
+  bottom: 1rem;
   left: 0;
   z-index: 30;
   width: var(--side-panel-width);
-  max-height: calc(100vh - 7rem);
+  max-height: calc(100dvh - 7rem);
   padding: 1rem 1.1rem;
-  overflow: auto;
+  overflow-y: auto;
   background: var(--espresso);
   border: 2px solid var(--burnt-rose-2);
   border-left: none;
@@ -163,9 +164,11 @@
   width: var(--side-panel-width);
   height: auto;
   min-height: 4rem;
+  max-height: calc(100dvh - 2rem);
   margin: 0;
   border-radius: 0 16px 16px 0;
   flex: 0 0 var(--side-panel-width);
+  overflow: hidden;
 }
 
 .partial-left-group .partial-header {
@@ -220,6 +223,47 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.side-panel,
+.side-panel__content {
+  scrollbar-width: thin;
+  scrollbar-color: var(--burnt-rose-2) transparent;
+}
+
+.side-panel::-webkit-scrollbar,
+.side-panel__content::-webkit-scrollbar {
+  width: 0.45rem;
+  height: 0.45rem;
+}
+
+.side-panel::-webkit-scrollbar-track,
+.side-panel__content::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 0.35rem 0;
+}
+
+.side-panel::-webkit-scrollbar-thumb,
+.side-panel__content::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--dusty-mauve), var(--burnt-rose-2));
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.side-panel::-webkit-scrollbar-thumb:hover,
+.side-panel__content::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--acento), var(--terracotta-clay));
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.side-panel::-webkit-scrollbar-corner,
+.side-panel__content::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* Partial / Terrain viewer */
@@ -257,8 +301,11 @@
   top: 1rem;
   bottom: 1rem;
   width: var(--side-panel-width);
-  max-height: none;
+  max-height: calc(100dvh - 2rem);
   height: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-left: none;
   border-radius: 0 16px 16px 0;
   background: var(--espresso);
@@ -922,7 +969,8 @@
     right: 0.75rem;
     bottom: 0.75rem;
     width: auto;
-    max-height: 45vh;
+    max-height: min(45vh, calc(100dvh - 1.5rem));
+    overflow-y: auto;
     border-left: none;
     border-radius: 16px;
   }

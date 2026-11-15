@@ -27,6 +27,7 @@ type Props = {
   routes?: DemPixel[][]
   routeColors?: Array<number | string>
   selectedRouteIndex?: number | null
+  focusTarget?: { lat: number; lon: number } | null
 }
 
 type SceneApi = {
@@ -41,6 +42,7 @@ type SceneApi = {
     colors?: Array<number | string>,
     selectedIndex?: number | null,
   ) => void
+  focusOn: (lat: number, lon: number) => void
 }
 
 const BASE_EXAGGERATION = 3.5
@@ -84,6 +86,7 @@ export default function TerrainViewer({
   routes,
   routeColors,
   selectedRouteIndex,
+  focusTarget,
 }: Props) {
   const mountRef = useRef<HTMLDivElement>(null)
   const apiRef = useRef<SceneApi | null>(null)
@@ -599,6 +602,21 @@ export default function TerrainViewer({
         selectedRouteIndexRef.current = selectedIndex
         drawRoutes(paths, colors, selectedIndex)
       },
+      focusOn: (lat: number, lon: number) => {
+        const { x, z } = model.geoToWorld({ lat, lon })
+        const sampled = model.sampleAt(x, z, effectiveExaggeration(exaggerationRef.current), sample)
+        const ty = sampled ? sampled.y : 0
+        const dist = Math.max(maxDimension * 0.25, 8)
+        const toPos = new THREE.Vector3(x + dist * 0.6, ty + dist * 0.5, z + dist * 0.6)
+        const toTarget = new THREE.Vector3(x, ty, z)
+        flight = {
+          fromPosition: camera.position.clone(),
+          toPosition: toPos,
+          fromTarget: controls.target.clone(),
+          toTarget,
+          t: 0,
+        }
+      },
     }
 
     return () => {
@@ -662,6 +680,12 @@ export default function TerrainViewer({
   useEffect(() => {
     apiRef.current?.setRoutes(routes ?? [], routeColors, selectedRouteIndex ?? null)
   }, [routes, routeColors, selectedRouteIndex])
+
+  useEffect(() => {
+    if (focusTarget) {
+      apiRef.current?.focusOn(focusTarget.lat, focusTarget.lon)
+    }
+  }, [focusTarget])
 
   return (
     <div
