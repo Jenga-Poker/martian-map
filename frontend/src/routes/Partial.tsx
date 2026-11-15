@@ -15,6 +15,7 @@ import { getPoi } from './../data/pois'
 import {
   getRouteDurationSeconds,
   getRouteLengthMeters,
+  parseResultExample,
   type RouteData,
 } from './../utils/pathy'
 import { DEFAULT_ROVER_ID, ROVERS, getRover } from './../utils/rovy'
@@ -458,6 +459,7 @@ export default function Partial() {
             routeColors={ROUTE_COLORS}
             selectedRouteIndex={selectedRouteIndex}
             focusTarget={focusTarget}
+            pins={zoneLocations}
           />
         )}
       </div>
@@ -537,9 +539,6 @@ export default function Partial() {
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--texto)' }}>
                       Elevación: {formatMeters(astronaut.elevation)}
-                    </div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--texto)', opacity: 0.75 }}>
-                      Haz clic en el terreno para moverlo
                     </div>
                   </section>
                 )}
@@ -830,12 +829,6 @@ export default function Partial() {
                   </dd>
                 </div>
               </dl>
-              {model?.rocky && (
-                <p className="partial-rocky">
-                  <span className="partial-rocky__swatch" aria-hidden="true" />
-                  Terreno rocoso · THEMIS
-                </p>
-              )}
             </header>
           </div>
 

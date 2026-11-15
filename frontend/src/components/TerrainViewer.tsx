@@ -13,6 +13,12 @@ export type AstronautPosition = {
   elevation: number
 }
 
+export type TerrainPin = {
+  name: string
+  lat: number
+  lon: number
+}
+
 type Props = {
   model: TerrainModel
   exaggeration: number
@@ -28,6 +34,7 @@ type Props = {
   routeColors?: Array<number | string>
   selectedRouteIndex?: number | null
   focusTarget?: { lat: number; lon: number } | null
+  pins?: TerrainPin[]
 }
 
 type SceneApi = {
@@ -43,6 +50,7 @@ type SceneApi = {
     selectedIndex?: number | null,
   ) => void
   focusOn: (lat: number, lon: number) => void
+  setPins: (pins: TerrainPin[]) => void
 }
 
 const BASE_EXAGGERATION = 3.5
@@ -50,72 +58,6 @@ const CAMERA_FOV = 42
 const REFERENCE_ELEVATION_SPAN = 1000 // meters, used to keep vertical exaggeration consistent across terrains
 
 const clamp01 = (value: number) => (value < 0 ? 0 : value > 1 ? 1 : value)
-
-const ROCKY_NODATA = 255
-
-/**
- * Suaviza la capa de rocosidad con un desenfoque de caja separable para que
- * los píxeles THEMIS no se aprecien como bloques sobre el terreno.
- * Devuelve la fracción rocosa (0..1) o -1 en las celdas sin datos.
- */
-function smoothRockyLayer(
-  raw: Uint8Array,
-  width: number,
-  height: number,
-  radius: number,
-): Float32Array {
-  const count = width * height
-  const horizontal = new Float32Array(count)
-  const horizontalWeight = new Float32Array(count)
-
-  for (let row = 0; row < height; row += 1) {
-    const rowStart = row * width
-    for (let col = 0; col < width; col += 1) {
-      const from = Math.max(0, col - radius)
-      const to = Math.min(width - 1, col + radius)
-      let sum = 0
-      let weight = 0
-      for (let c = from; c <= to; c += 1) {
-        const value = raw[rowStart + c]
-        if (value !== ROCKY_NODATA) {
-          sum += value
-          weight += 1
-        }
-      }
-      horizontal[rowStart + col] = sum
-      horizontalWeight[rowStart + col] = weight
-    }
-  }
-
-  const result = new Float32Array(count)
-  const maxFraction = ROCKY_NODATA - 1
-  for (let row = 0; row < height; row += 1) {
-    const from = Math.max(0, row - radius)
-    const to = Math.min(height - 1, row + radius)
-    for (let col = 0; col < width; col += 1) {
-      let sum = 0
-      let weight = 0
-      for (let r = from; r <= to; r += 1) {
-        const index = r * width + col
-        const w = horizontalWeight[index]
-        if (w > 0) {
-          sum += horizontal[index]
-          weight += w
-        }
-      }
-      result[row * width + col] = weight > 0 ? sum / weight / maxFraction : -1
-    }
-  }
-
-  return result
-}
-
-/** Ruido determinista por celda para repartir piedras sueltas. */
-function stoneHash(x: number, y: number): number {
-  let h = Math.imul(x, 374761393) + Math.imul(y, 668265263)
-  h = Math.imul(h ^ (h >>> 13), 1274126177)
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296
-}
 
 const palette = MARS_PALETTE.map((hex) => new THREE.Color(hex))
 
@@ -153,6 +95,7 @@ export default function TerrainViewer({
   routeColors,
   selectedRouteIndex,
   focusTarget,
+  pins,
 }: Props) {
   const mountRef = useRef<HTMLDivElement>(null)
   const apiRef = useRef<SceneApi | null>(null)
@@ -165,6 +108,7 @@ export default function TerrainViewer({
   const routesRef = useRef<DemPixel[][]>(routes ?? [])
   const routeColorsRef = useRef<Array<number | string> | undefined>(routeColors)
   const selectedRouteIndexRef = useRef<number | null>(selectedRouteIndex ?? null)
+  const pinsRef = useRef<TerrainPin[]>(pins ?? [])
 
   useEffect(() => {
     onHoverRef.current = onHover
@@ -176,6 +120,7 @@ export default function TerrainViewer({
     routesRef.current = routes ?? []
     routeColorsRef.current = routeColors
     selectedRouteIndexRef.current = selectedRouteIndex ?? null
+    pinsRef.current = pins ?? []
   })
 
   useEffect(() => {
@@ -193,13 +138,6 @@ export default function TerrainViewer({
     const color = { r: 0, g: 0, b: 0 }
     const light = new THREE.Vector3(-0.55, 0.78, 0.4).normalize()
     const colorRange = meta.colorMax - meta.colorMin || 1
-    const rocky = model.rocky
-      ? smoothRockyLayer(model.rocky, meta.width, meta.height, 4)
-      : null
-    // Gris calculado desde la luminancia: quita el color sin cambiar el brillo.
-    const ROCKY_ZONE_BLEND = 0.06
-    const ROCKY_STONE_BLEND = 0.84
-    const ROCKY_STONE_CELL = 3
 
     for (let row = 0; row < meta.height; row += 1) {
       for (let col = 0; col < meta.width; col += 1) {
@@ -229,32 +167,6 @@ export default function TerrainViewer({
         const invLength = 1 / Math.sqrt(slopeX * slopeX + 1 + slopeZ * slopeZ)
         const shade = (-slopeX * light.x + light.y - slopeZ * light.z) * invLength
         const lightFactor = 0.9 + 0.28 * Math.max(0, shade)
-
-        if (rocky) {
-          const zone = rocky[i]
-          if (zone > 0.015) {
-            const stoneX = Math.floor(col / ROCKY_STONE_CELL)
-            const stoneY = Math.floor(row / ROCKY_STONE_CELL)
-            const grain = stoneHash(stoneX, stoneY)
-            // Solo parte de las celdas forma una piedra reconocible.
-            const stone = clamp01((grain - 0.6) / 0.28)
-            // En zonas poco rocosas quedan menos piedras, pero igual de grises.
-            const gate = clamp01(zone * 3)
-            const stoneMask = stone * (0.4 + 0.6 * gate)
-            // Cada piedra tiene un gris propio, de oscuro a claro.
-            const shade = 0.7 + stoneHash(stoneX + 97, stoneY + 53) * 0.5
-            const luminance =
-              color.r * 0.299 + color.g * 0.587 + color.b * 0.114
-            const gray = luminance * shade
-            const blend =
-              zone * ROCKY_ZONE_BLEND + stoneMask * ROCKY_STONE_BLEND
-            if (blend > 0.003) {
-              color.r += (gray - color.r) * blend
-              color.g += (gray - color.g) * blend
-              color.b += (gray - color.b) * blend
-            }
-          }
-        }
 
         colorArray[offset] = color.r * lightFactor
         colorArray[offset + 1] = color.g * lightFactor
@@ -374,6 +286,91 @@ export default function TerrainViewer({
     markerBase.position.y = 0.02
     marker.add(markerBase, markerPole, markerHead)
     scene.add(marker)
+
+    // Pins for the location list (data/locations), one marker per zone location.
+    const pinGroup = new THREE.Group()
+    pinGroup.name = 'location-pins'
+    scene.add(pinGroup)
+
+    // Los nombres se dibujan como etiquetas HTML sobre el canvas para que se
+    // lean nítidos y mantengan un tamaño constante en pantalla.
+    const pinLabelLayer = document.createElement('div')
+    pinLabelLayer.className = 'terrain-pin-label-layer'
+    mount.appendChild(pinLabelLayer)
+
+    const pinColor = new THREE.Color(0xff2d95)
+    const pinMaterial = new THREE.MeshStandardMaterial({
+      color: pinColor,
+      emissive: pinColor,
+      emissiveIntensity: 0.7,
+      roughness: 0.3,
+      metalness: 0.05,
+    })
+    const pinBaseMaterial = new THREE.MeshBasicMaterial({
+      color: pinColor,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.9,
+    })
+    const pinPoleGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.42, 8)
+    const pinHeadGeometry = new THREE.SphereGeometry(0.095, 16, 12)
+    const pinBaseGeometry = new THREE.RingGeometry(0.1, 0.18, 24)
+    const pinSample = { elevation: 0, y: 0 }
+
+    const pinEntries: Array<{
+      base: THREE.Vector3
+      element: HTMLDivElement
+      marker: THREE.Group
+    }> = []
+    const pinLabelBase = new THREE.Vector3()
+    const pinLabelTop = new THREE.Vector3()
+
+    const rebuildPins = (nextPins: TerrainPin[]) => {
+      while (pinGroup.children.length > 0) {
+        pinGroup.remove(pinGroup.children[0])
+      }
+      for (const entry of pinEntries) entry.element.remove()
+      pinEntries.length = 0
+
+      for (const pin of nextPins) {
+        const { x, z } = model.geoToWorld({ lat: pin.lat, lon: pin.lon })
+        const sampled = model.sampleAt(
+          x,
+          z,
+          effectiveExaggeration(exaggerationRef.current),
+          pinSample,
+        )
+        if (!sampled) continue
+
+        const pinObject = new THREE.Group()
+        pinObject.position.set(x, sampled.y, z)
+        pinObject.name = 'location-pin'
+        pinObject.userData.name = pin.name
+
+        const pole = new THREE.Mesh(pinPoleGeometry, pinMaterial)
+        pole.position.y = 0.21
+        const head = new THREE.Mesh(pinHeadGeometry, pinMaterial)
+        head.position.y = 0.49
+        const base = new THREE.Mesh(pinBaseGeometry, pinBaseMaterial)
+        base.rotation.x = -Math.PI / 2
+        base.position.y = 0.01
+
+        pinObject.add(base, pole, head)
+        pinGroup.add(pinObject)
+
+        const label = document.createElement('div')
+        label.className = 'terrain-pin-label'
+        label.textContent = pin.name
+        pinLabelLayer.appendChild(label)
+
+        pinEntries.push({
+          base: new THREE.Vector3(x, sampled.y, z),
+          element: label,
+          marker: pinObject,
+        })
+      }
+    }
+    rebuildPins(pinsRef.current)
 
     const routeGroup = new THREE.Group()
     routeGroup.name = 'routes'
@@ -575,8 +572,6 @@ export default function TerrainViewer({
     const onPointerUp = (event: PointerEvent) => {
       if (!pointerDown) return
       pointerDown = false
-      // Solo el botón principal y sin arrastre: así no se coloca el
-      // astronauta al girar o desplazar la cámara.
       if (event.button !== 0) return
       const dx = event.clientX - downX
       const dy = event.clientY - downY
@@ -585,8 +580,11 @@ export default function TerrainViewer({
       if (!select) return
       const hit = pickTerrain(event.clientX, event.clientY)
       if (hit) {
-        // Permite recolocar al astronauta con un nuevo clic.
-        select({ lat: hit.lat, lon: hit.lon, elevation: hit.elevation })
+        select({
+          lat: hit.lat,
+          lon: hit.lon,
+          elevation: hit.elevation,
+        })
       }
     }
     const onPointerCancel = () => {
@@ -624,6 +622,33 @@ export default function TerrainViewer({
       const distance = camera.position.distanceTo(controls.target)
       ring.scale.setScalar(Math.max(0.55, distance / 34))
       marker.scale.setScalar(Math.max(0.6, distance / 28))
+      const pinScale = Math.max(0.6, distance / 28)
+      const labelWidth = mount.clientWidth
+      const labelHeight = mount.clientHeight
+      for (const entry of pinEntries) {
+        entry.marker.scale.setScalar(pinScale)
+        pinLabelBase.copy(entry.base).project(camera)
+        pinLabelTop.copy(entry.base)
+        pinLabelTop.y += 0.62 * pinScale
+        pinLabelTop.project(camera)
+
+        const behind = pinLabelBase.z > 1 || pinLabelTop.z > 1
+        const labelX = (pinLabelBase.x * 0.5 + 0.5) * labelWidth
+        const labelY = (-pinLabelTop.y * 0.5 + 0.5) * labelHeight
+        if (
+          behind ||
+          labelX < -120 ||
+          labelX > labelWidth + 120 ||
+          labelY < -40 ||
+          labelY > labelHeight + 40
+        ) {
+          entry.element.style.display = 'none'
+        } else {
+          entry.element.style.display = 'block'
+          entry.element.style.left = `${labelX.toFixed(1)}px`
+          entry.element.style.top = `${(labelY - 4).toFixed(1)}px`
+        }
+      }
       renderer.render(scene, camera)
     })
 
@@ -633,6 +658,7 @@ export default function TerrainViewer({
         terrain.scale.y = effectiveExaggeration(value) / initialExaggeration
         updateMarker(astronautRef.current)
         drawRoutes(routesRef.current, routeColorsRef.current, selectedRouteIndexRef.current)
+        rebuildPins(pinsRef.current)
       },
       setAutoRotate: (value: boolean) => {
         controls.autoRotate = value
@@ -675,6 +701,10 @@ export default function TerrainViewer({
           t: 0,
         }
       },
+      setPins: (nextPins: TerrainPin[]) => {
+        pinsRef.current = nextPins
+        rebuildPins(nextPins)
+      },
     }
 
     return () => {
@@ -697,6 +727,17 @@ export default function TerrainViewer({
       markerBase.geometry.dispose()
       markerMat.dispose()
       ;(markerBase.material as THREE.Material).dispose()
+      while (pinGroup.children.length > 0) {
+        pinGroup.remove(pinGroup.children[0])
+      }
+      pinPoleGeometry.dispose()
+      pinHeadGeometry.dispose()
+      pinBaseGeometry.dispose()
+      pinMaterial.dispose()
+      pinBaseMaterial.dispose()
+      for (const entry of pinEntries) entry.element.remove()
+      pinEntries.length = 0
+      pinLabelLayer.remove()
       while (routeGroup.children.length > 0) {
         const child = routeGroup.children[0]
         routeGroup.remove(child)
@@ -745,6 +786,10 @@ export default function TerrainViewer({
       apiRef.current?.focusOn(focusTarget.lat, focusTarget.lon)
     }
   }, [focusTarget])
+
+  useEffect(() => {
+    apiRef.current?.setPins(pins ?? [])
+  }, [pins])
 
   return (
     <div
