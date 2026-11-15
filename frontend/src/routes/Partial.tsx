@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useParams } from 'react-router'
 import TerrainViewer, {
   type AstronautPosition,
   type CameraMode,
@@ -7,15 +7,17 @@ import TerrainViewer, {
 import SidePanel from './../components/SidePanel'
 import Loading from './../components/Loading'
 import discIcon from './../assets/disc-outline.svg'
-import Button from './../components/Button'
-import AIOverlay from './../components/AIOverlay'
+import AIOverlay, {
+  type AIActionResult,
+  type AIResult,
+} from './../components/AIOverlay'
 import { getPoi } from './../data/pois'
 import {
   getRouteDurationSeconds,
   getRouteLengthMeters,
-  parseResultExample,
+  type RouteData,
 } from './../utils/pathy'
-import { DEFAULT_ROVER_ID, ROVERS, getRover } from './../utils/rovy'
+import { DEFAULT_ROVER_ID, getRover } from './../utils/rovy'
 import {
   formatCoord,
   formatMeters,
@@ -26,26 +28,95 @@ import {
 import { createTerrainModel } from './../utils/terrainModel'
 import './../App.css'
 
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+const ROUTE_COLORS = ['#ff0000', '#ffff00', '#00ff00']
+
+type Location = {
+  name: string
+  lat: number
+  lon: number
+  height: number
+  zone: string
+}
+
+function formatErrorDetail(detail: unknown): string {
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    const messages = detail.map((item) => {
+      if (item && typeof item === 'object' && 'msg' in item) {
+        const msg = (item as { msg?: unknown }).msg
+        return typeof msg === 'string' ? msg : String(msg)
+      }
+      return formatErrorDetail(item)
+    })
+    return messages.filter(Boolean).join(', ')
+  }
+  if (detail && typeof detail === 'object') {
+    const msg = (detail as { msg?: unknown }).msg
+    if (typeof msg === 'string') return msg
+    try {
+      return JSON.stringify(detail)
+    } catch {
+      return String(detail)
+    }
+  }
+  return String(detail ?? 'Error desconocido')
+}
+
+async function readError(response: Response): Promise<string> {
+  const data = (await response.json().catch(() => null)) as
+    | { detail?: unknown }
+    | null
+  if (data?.detail != null) return formatErrorDetail(data.detail)
+  return `Error en servidor (${response.status})`
+}
+
+function normalizeRoutes(raw: unknown): RouteData[] {
+  if (Array.isArray(raw)) return raw as RouteData[]
+  if (!raw || typeof raw !== 'object') return []
+
+  const payload = raw as {
+    routes?: RouteData[]
+    path?: RouteData['path']
+    heights?: number[]
+  }
+  if (Array.isArray(payload.routes)) return payload.routes
+  if (Array.isArray(payload.path)) {
+    return [{ path: payload.path, heights: payload.heights }]
+  }
+  return []
+}
+
+function getRouteLabel(route: RouteData, index: number): string {
+  const multiplier = route.height_multiplier
+  if (multiplier == null) return `Route ${index + 1}`
+  if (multiplier <= 1) return 'Dangerous'
+  if (multiplier <= 5) return 'Medium'
+  return 'Slow'
+}
+
 export default function Partial() {
-  const navigate = useNavigate()
   const { poiId } = useParams()
   const poi = getPoi(poiId)
   const [data, setData] = useState<TerrainData | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [exaggeration, setExaggeration] = useState(3.5)
-  const [autoRotate, setAutoRotate] = useState(false)
-  const [wireframe, setWireframe] = useState(false)
-  const [cameraMode, setCameraMode] = useState<CameraMode>('perspective')
+  const exaggeration = 3.5
+  const autoRotate = false
+  const wireframe = false
+  const cameraMode: CameraMode = 'perspective'
   const [resetSignal, setResetSignal] = useState(0)
   const [hover, setHover] = useState<HoverInfo | null>(null)
   const [panelOpen, setPanelOpen] = useState(true)
   const [astronaut, setAstronaut] = useState<AstronautPosition | null>(null)
   const [selectedRouteIndex, setSelectedRouteIndex] = useState<number | null>(null)
   const [selectedRoverId, setSelectedRoverId] = useState<string | null>(DEFAULT_ROVER_ID)
+  const [routeData, setRouteData] = useState<RouteData[]>([])
   const selectedRover = useMemo(() => getRover(selectedRoverId), [selectedRoverId])
 
   useEffect(() => {
     setAstronaut(null)
+    setRouteData([])
+    setSelectedRouteIndex(null)
   }, [poi.id])
 
   useEffect(() => {
@@ -75,10 +146,169 @@ export default function Partial() {
     [data],
   )
 
-  const demoRouteData = useMemo(() => parseResultExample(), [])
-  const demoRoutes = useMemo(() => demoRouteData.map((r) => r.path), [demoRouteData])
-  const routeColors = ['#ff0000', '#ffff00', '#00ff00']
-  const routeNames = ['Dangerous', 'Medium', 'Slow']
+  const routePaths = useMemo(
+    () => routeData.map((route) => route.path),
+    [routeData],
+  )
+  const executeAIAction = useCallback(
+    async (
+      ai: AIResult,
+      signal: AbortSignal,
+    ): Promise<AIActionResult> => {
+      const action = (ai.action || '').toLowerCase()
+      const isPathAction =
+        action === 'navigate_to' ||
+        action.includes('path') ||
+        action.includes('route') ||
+        action.includes('ruta')
+
+      if (!isPathAction) {
+        return {
+          ok: true,
+          message: 'La IA no ha solicitado calcular una ruta.',
+        }
+      }
+
+      if (!data || !model) {
+        return { ok: false, message: 'El terreno aún no está cargado.' }
+      }
+
+      if (!astronaut) {
+        return {
+          ok: false,
+          message:
+            'Coloca primero el astronauta haciendo clic sobre el terreno.',
+        }
+      }
+
+      const endName =
+        typeof ai.options?.end === 'string' ? ai.options.end : null
+      if (!endName) {
+        return {
+          ok: false,
+          message: 'La IA no ha identificado un destino válido.',
+        }
+      }
+
+      const roverId =
+        typeof ai.options?.rover === 'string' ? ai.options.rover : null
+      const rover = getRover(roverId) ?? selectedRover
+      if (!rover) {
+        return {
+          ok: false,
+          message: 'No hay un rover disponible para calcular la ruta.',
+        }
+      }
+      setSelectedRoverId(rover.id)
+
+      try {
+        const fetchLocations = async (path: string): Promise<Location[]> => {
+          const response = await fetch(`${API_URL}${path}`, { signal })
+          if (!response.ok) return []
+          const payload = (await response.json()) as {
+            locations?: Location[]
+          }
+          return Array.isArray(payload.locations) ? payload.locations : []
+        }
+
+        const findLocation = (locations: Location[]) =>
+          locations.find(
+            (location) =>
+              location.name.trim().toLowerCase() ===
+              endName.trim().toLowerCase(),
+          )
+
+        let locations = await fetchLocations(
+          `/locations/${encodeURIComponent(poi.id)}`,
+        )
+        let end = findLocation(locations)
+
+        if (!end) {
+          locations = await fetchLocations('/locations')
+          end = findLocation(locations)
+        }
+
+        if (!end) {
+          return {
+            ok: false,
+            message: `No se encontraron coordenadas para "${endName}" en la zona ${poi.id}.`,
+          }
+        }
+        const destination = end
+        const bounds = data.meta.bounds
+        if (
+          destination.lat < bounds.latMin ||
+          destination.lat > bounds.latMax ||
+          destination.lon < bounds.lonMin ||
+          destination.lon > bounds.lonMax
+        ) {
+          return {
+            ok: false,
+            message: `Las coordenadas de "${destination.name}" no están dentro de ${poi.name}. Revisa data/locations.csv.`,
+          }
+        }
+
+        const pixelSize =
+          typeof data.meta.sourcePixelSizeMeters === 'number'
+            ? data.meta.sourcePixelSizeMeters
+            : data.meta.sourcePixelSizeMeters?.x
+        const maxHeightDiff =
+          pixelSize != null && Number.isFinite(pixelSize) && pixelSize > 0
+            ? rover.maxHeightDiffPerMeter * pixelSize
+            : rover.maxHeightDiffPerMeter
+        const pathSource =
+          (data.meta.sourceFile || poi.id).split(/[\\/]/).pop() ?? poi.id
+        const pathZone = pathSource.replace(/\.tiff?$/i, '')
+
+        const pathResponse = await fetch(`${API_URL}/path`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            zone: pathZone,
+            start: { lat: astronaut.lat, lon: astronaut.lon },
+            end: { lat: destination.lat, lon: destination.lon },
+            max_height_diff: maxHeightDiff,
+            multipliers: [1, 5, 50],
+          }),
+          signal,
+        })
+        if (!pathResponse.ok) {
+          return { ok: false, message: await readError(pathResponse) }
+        }
+
+        const routes = normalizeRoutes(await pathResponse.json())
+        if (routes.length === 0) {
+          return {
+            ok: false,
+            message: 'El servidor no devolvió ninguna ruta.',
+          }
+        }
+
+        setRouteData(routes)
+        setSelectedRouteIndex(null)
+        return {
+          ok: true,
+          message: `Ruta generada correctamente. ${routes.length} rutas calculadas.`,
+        }
+      } catch (cause) {
+        if (
+          typeof cause === 'object' &&
+          cause !== null &&
+          (cause as { name?: string }).name === 'AbortError'
+        ) {
+          return { ok: false, message: 'Operación cancelada.' }
+        }
+        return {
+          ok: false,
+          message:
+            cause instanceof Error
+              ? cause.message
+              : 'Error al calcular la ruta.',
+        }
+      }
+    },
+    [astronaut, data, model, poi.id, poi.name, selectedRover],
+  )
 
   const formatDuration = (seconds: number): string => {
     if (!Number.isFinite(seconds) || seconds < 0) return '—'
@@ -122,8 +352,8 @@ export default function Partial() {
             onAstronautSelect={(position) => {
               setAstronaut(position)
             }}
-            routes={demoRoutes}
-            routeColors={routeColors}
+            routes={routePaths}
+            routeColors={ROUTE_COLORS}
             selectedRouteIndex={selectedRouteIndex}
           />
         )}
@@ -195,7 +425,23 @@ export default function Partial() {
             >
               <div style={{ display: 'grid', gap: '1rem' }}>
                 {(() => {
-                  const allHeights = demoRouteData.flatMap((r) => r.heights ?? [])
+                  if (routeData.length === 0) {
+                    return (
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: '0.82rem',
+                          lineHeight: 1.45,
+                          color: 'var(--texto)',
+                        }}
+                      >
+                        No routes yet. Place the astronaut on the terrain and
+                        use the voice assistant to calculate a route.
+                      </p>
+                    )
+                  }
+
+                  const allHeights = routeData.flatMap((r) => r.heights ?? [])
                   const gMin = allHeights.length ? Math.min(...allHeights) : 0
                   const gMax = allHeights.length ? Math.max(...allHeights) : 1
                   const pad = (gMax - gMin) * 0.08 || 1
@@ -246,10 +492,10 @@ export default function Partial() {
                               />
                             )
                           })}
-                          {demoRouteData.map((route, index) => {
+                          {routeData.map((route, index) => {
                             const heights = route.heights ?? []
                             if (heights.length < 2) return null
-                            const color = routeColors[index] ?? '#38bdf8'
+                            const color = ROUTE_COLORS[index] ?? '#38bdf8'
                             const isSelected = selectedRouteIndex === index
                             const dimmed = selectedRouteIndex != null && !isSelected
                             const pts = heights.map((h, i) => `${toX(i, heights.length)},${toY(h)}`).join(' ')
@@ -284,16 +530,15 @@ export default function Partial() {
                         </div>
                       </div>
                       <div style={{ display: 'grid', gap: '0.5rem' }}>
-                        {demoRouteData.map((route, index) => {
-                          const heights = route.heights ?? []
-                          const color = routeColors[index] ?? '#38bdf8'
+                        {routeData.map((route, index) => {
+                          const color = ROUTE_COLORS[index] ?? '#38bdf8'
                           const isSelected = selectedRouteIndex === index
                           const dimmed = selectedRouteIndex != null && !isSelected
                           const lengthMeters = model ? getRouteLengthMeters(model, route.path) : 0
                           const durationSeconds = selectedRover
                             ? getRouteDurationSeconds(lengthMeters, selectedRover.velocityMps)
                             : NaN
-                          const name = routeNames[index] ?? `Route ${index + 1}`
+                          const name = getRouteLabel(route, index)
                           return (
                             <button
                               key={index}
@@ -456,7 +701,7 @@ export default function Partial() {
         </>
       )}
 
-      <AIOverlay zone={poi.id} />
+      <AIOverlay zone={poi.id} onAction={executeAIAction} />
     </main>
   )
 }

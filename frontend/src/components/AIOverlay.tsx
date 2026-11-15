@@ -1,141 +1,231 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import logoMaya from '../assets/logomaya-limpio.svg'
 import { useSpeechToText } from '../hooks/useSpeechToText'
+import { ROVERS, getRover } from '../utils/rovy'
 
-type AIResult = {
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+
+export type AIResult = {
   action: string
-  options: Record<string, any>
+  options?: {
+    rover?: string | null
+    end?: string | null
+    [key: string]: unknown
+  }
 }
 
-type RouteResult = {
+export type AIActionResult = {
   ok: boolean
   message: string
-  distance?: number
   points?: number
-}
-
-type OverlayState = 'idle' | 'listening' | 'analyzing' | 'routing' | 'done' | 'error'
-
-function formatValue(value: any): string {
-  if (value == null) return '—'
-  if (typeof value === 'object') {
-    if ('lat' in value && 'lon' in value) return `${value.lat}, ${value.lon}`
-    if ('row' in value && 'col' in value) return `fila ${value.row}, col ${value.col}`
-    const entries = Object.entries(value)
-      .map(([k, v]) => `${k}: ${formatValue(v)}`)
-      .join(', ')
-    return entries || '—'
-  }
-  return String(value)
-}
-
-function formatActionLabel(action: string): string {
-  const map: Record<string, string> = {
-    navigate_to: 'Generar ruta',
-    find_path: 'Buscar ruta',
-    calculate_route: 'Calcular ruta',
-  }
-  return map[action] || action.replace(/_/g, ' ')
+  distance?: number
 }
 
 type AIOverlayProps = {
   zone?: string
+  onAction?: (
+    result: AIResult,
+    signal: AbortSignal,
+  ) => Promise<AIActionResult>
 }
 
-export default function AIOverlay({ zone }: AIOverlayProps) {
+type OverlayState = 'idle' | 'analyzing' | 'routing' | 'done' | 'error'
+
+const ACTION_LABELS: Record<string, string> = {
+  navigate_to: 'Calcular ruta',
+  find_path: 'Buscar ruta',
+  calculate_route: 'Calcular ruta',
+}
+
+const OPTION_LABELS: Record<string, string> = {
+  rover: 'Rover',
+  end: 'Destino',
+  zone: 'Zona',
+  multipliers: 'Multiplicadores',
+  max_height_diff: 'Desnivel máximo',
+}
+
+function formatActionLabel(action: string): string {
+  if (!action) return 'No especificada'
+  return ACTION_LABELS[action] || action.replace(/_/g, ' ')
+}
+
+function formatOptionLabel(key: string): string {
+  return OPTION_LABELS[key] || key.replace(/_/g, ' ')
+}
+
+function formatOptionValue(key: string, value: unknown): string {
+  if (key === 'rover' && typeof value === 'string') {
+    return getRover(value)?.name ?? value.replace(/_/g, ' ')
+  }
+  if (Array.isArray(value)) return value.map(formatValue).join(', ')
+  if (typeof value === 'object' && value !== null) {
+    return Object.entries(value)
+      .map(([childKey, childValue]) => {
+        return `${formatOptionLabel(childKey)}: ${formatValue(childValue)}`
+      })
+      .join(', ')
+  }
+  return formatValue(value)
+}
+
+function formatValue(value: unknown): string {
+  if (value == null) return '—'
+  if (Array.isArray(value)) return value.map(formatValue).join(', ')
+  if (typeof value === 'object') {
+    return Object.entries(value)
+      .map(([key, childValue]) => {
+        return `${formatOptionLabel(key)}: ${formatValue(childValue)}`
+      })
+      .join(', ')
+  }
+  return String(value)
+}
+
+function formatErrorDetail(detail: unknown): string {
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    const messages = detail.map((item) => {
+      if (item && typeof item === 'object' && 'msg' in item) {
+        const msg = (item as { msg?: unknown }).msg
+        return typeof msg === 'string' ? msg : String(msg)
+      }
+      return formatErrorDetail(item)
+    })
+    return messages.filter(Boolean).join(', ')
+  }
+  if (detail && typeof detail === 'object') {
+    const msg = (detail as { msg?: unknown }).msg
+    if (typeof msg === 'string') return msg
+    try {
+      return JSON.stringify(detail)
+    } catch {
+      return String(detail)
+    }
+  }
+  return String(detail ?? 'Error desconocido')
+}
+
+export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
   const [overlayState, setOverlayState] = useState<OverlayState>('idle')
   const [error, setError] = useState<string | null>(null)
   const [finalTranscript, setFinalTranscript] = useState('')
   const [aiResult, setAiResult] = useState<AIResult | null>(null)
-  const [routeResult, setRouteResult] = useState<RouteResult | null>(null)
+  const [actionResult, setActionResult] = useState<AIActionResult | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
-  const processInstruction = useCallback(async (instruction: string) => {
-    abortRef.current?.abort()
-    const controller = new AbortController()
-    abortRef.current = controller
-
-    setFinalTranscript(instruction)
-    setAiResult(null)
-    setRouteResult(null)
-    setError(null)
-    setOverlayState('analyzing')
-
-    try {
-      const response = await fetch('http://localhost:8000/ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ instruction, zone }),
-        signal: controller.signal,
-      })
-      if (!response.ok) {
-        const errData = await response.json().catch(() => null)
-        throw new Error(errData?.detail || `Error en servidor (${response.status})`)
-      }
-      const data: AIResult = await response.json()
-      if (controller.signal.aborted) return
-      setAiResult(data)
-
-      const action = (data.action || '').toLowerCase()
-      const opts = data.options || {}
-      const isPathAction = action.includes('path') || action.includes('route') || action.includes('ruta')
-
-      if (isPathAction) {
-        setOverlayState('routing')
-        const hasCoords =
-          opts.start && opts.end &&
-          (('lat' in opts.start && 'lon' in opts.start) || ('row' in opts.start && 'col' in opts.start))
-        if (hasCoords && opts.start.lat != null && opts.start.lon != null && opts.end.lat != null && opts.end.lon != null) {
-          try {
-            const pathRes = await fetch('http://localhost:8000/path', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                zone: opts.zone || 'default',
-                start: { lat: Number(opts.start.lat), lon: Number(opts.start.lon) },
-                end: { lat: Number(opts.end.lat), lon: Number(opts.end.lon) },
-                multipliers: Array.isArray(opts.multipliers) ? opts.multipliers : [1, 1, 1],
-                max_height_diff: opts.max_height_diff ?? undefined,
-              }),
-              signal: controller.signal,
-            })
-            if (!pathRes.ok) {
-              const errData = await pathRes.json().catch(() => null)
-              throw new Error(errData?.detail || `Error al generar ruta (${pathRes.status})`)
-            }
-            const pathData = await pathRes.json()
-            if (controller.signal.aborted) return
-            const points = Array.isArray(pathData?.path) ? pathData.path.length : Array.isArray(pathData?.points) ? pathData.points.length : undefined
-            const distance = typeof pathData?.distance === 'number' ? pathData.distance : typeof pathData?.cost === 'number' ? pathData.cost : undefined
-            setRouteResult({ ok: true, message: 'Ruta generada correctamente.', distance, points })
-          } catch (e: any) {
-            if (e?.name === 'AbortError') return
-            setRouteResult({ ok: false, message: e?.message || 'No se pudo generar la ruta.' })
-          }
-        } else {
-          setRouteResult({
-            ok: true,
-            message: 'Ruta solicitada con los parámetros indicados.',
-          })
-        }
-      }
-
-      if (!controller.signal.aborted) setOverlayState('done')
-    } catch (e: any) {
-      if (e?.name === 'AbortError') return
-      setError(e?.message || 'Error al comunicarse con la IA.')
-      setOverlayState('error')
-    } finally {
-      if (abortRef.current === controller) abortRef.current = null
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort()
     }
-  }, [zone])
+  }, [])
 
-  const { status: speechStatus, transcript, interim, error: speechError, supported, toggle, reset: resetSpeech } =
-    useSpeechToText({
-      onFinal: (text) => {
-        void processInstruction(text)
-      },
-    })
+  const processInstruction = useCallback(
+    async (instruction: string) => {
+      abortRef.current?.abort()
+      const controller = new AbortController()
+      abortRef.current = controller
+
+      setFinalTranscript(instruction)
+      setAiResult(null)
+      setActionResult(null)
+      setError(null)
+      setOverlayState('analyzing')
+
+      try {
+        const response = await fetch(`${API_URL}/ai`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            instruction,
+            zone,
+            rovers: ROVERS.map(({ id, name, description }) => ({
+              id,
+              name,
+              description,
+            })),
+          }),
+          signal: controller.signal,
+        })
+        if (!response.ok) {
+          const data = (await response.json().catch(() => null)) as
+            | { detail?: unknown }
+            | null
+          throw new Error(
+            data?.detail != null
+              ? formatErrorDetail(data.detail)
+              : `Error en servidor (${response.status})`,
+          )
+        }
+
+        const data = (await response.json()) as AIResult
+        if (controller.signal.aborted) return
+        setAiResult(data)
+
+        const action = (data.action || '').toLowerCase()
+        const isPathAction =
+          action === 'navigate_to' ||
+          action.includes('path') ||
+          action.includes('route') ||
+          action.includes('ruta')
+
+        if (!isPathAction) {
+          setActionResult({
+            ok: true,
+            message: 'La IA no ha solicitado calcular una ruta.',
+          })
+          setOverlayState('done')
+          return
+        }
+
+        if (!onAction) {
+          setActionResult({
+            ok: false,
+            message: 'No hay un manejador de acciones disponible.',
+          })
+          setOverlayState('error')
+          return
+        }
+
+        setOverlayState('routing')
+        const result = await onAction(data, controller.signal)
+        if (controller.signal.aborted) return
+        setActionResult(result)
+        setOverlayState(result.ok ? 'done' : 'error')
+      } catch (cause) {
+        if (
+          typeof cause === 'object' &&
+          cause !== null &&
+          (cause as { name?: string }).name === 'AbortError'
+        ) {
+          return
+        }
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : 'Error al comunicarse con la IA.',
+        )
+        setOverlayState('error')
+      } finally {
+        if (abortRef.current === controller) abortRef.current = null
+      }
+    },
+    [onAction, zone],
+  )
+
+  const {
+    status: speechStatus,
+    transcript,
+    interim,
+    error: speechError,
+    supported,
+    toggle,
+    reset: resetSpeech,
+  } = useSpeechToText({
+    onFinal: (text) => {
+      void processInstruction(text)
+    },
+  })
 
   const reset = useCallback(() => {
     abortRef.current?.abort()
@@ -145,69 +235,98 @@ export default function AIOverlay({ zone }: AIOverlayProps) {
     setError(null)
     setFinalTranscript('')
     setAiResult(null)
-    setRouteResult(null)
+    setActionResult(null)
   }, [resetSpeech])
 
   const listening = speechStatus === 'listening'
   const busy = overlayState === 'analyzing' || overlayState === 'routing'
   const combinedError = speechError || error
-  const showTranscript = listening || transcript.length > 0 || interim.length > 0 || finalTranscript.length > 0
-  const showPanel = showTranscript || busy || Boolean(aiResult) || Boolean(routeResult) || Boolean(combinedError)
-
-  const statusLabel =
-    overlayState === 'listening' || listening
-      ? 'Escuchando…'
-      : overlayState === 'analyzing'
-        ? 'Analizando instrucción...'
-        : overlayState === 'routing'
-          ? 'Generando ruta...'
-          : overlayState === 'done'
-            ? 'Proceso completado'
-            : overlayState === 'error'
-              ? 'Error'
-              : 'Asistente de voz'
-
+  const showTranscript =
+    listening ||
+    transcript.length > 0 ||
+    interim.length > 0 ||
+    finalTranscript.length > 0
+  const showPanel =
+    showTranscript ||
+    busy ||
+    Boolean(aiResult) ||
+    Boolean(actionResult) ||
+    Boolean(combinedError)
   const displayTranscript = finalTranscript || transcript
+
+  const statusLabel = listening
+    ? 'Escuchando…'
+    : overlayState === 'analyzing'
+      ? 'Analizando instrucción…'
+      : overlayState === 'routing'
+        ? 'Calculando ruta…'
+        : overlayState === 'done'
+          ? 'Proceso completado'
+          : overlayState === 'error'
+            ? 'Error'
+            : 'Asistente de voz'
+
+  const optionEntries = aiResult?.options
+    ? Object.entries(aiResult.options).filter(([, value]) => {
+        return value != null && value !== ''
+      })
+    : []
 
   return (
     <div className="ai-overlay">
       {showPanel && (
-        <div className={`ai-overlay__panel${combinedError ? ' is-error' : ''}`} role="status" aria-live="polite">
+        <div
+          className={`ai-overlay__panel${combinedError ? ' is-error' : ''}`}
+          role="status"
+          aria-live="polite"
+        >
           <div className="ai-overlay__header">
             <p className="ai-overlay__state">{statusLabel}</p>
           </div>
 
-          {combinedError && <p className="ai-overlay__error">{combinedError}</p>}
+          {combinedError && (
+            <p className="ai-overlay__error">{combinedError}</p>
+          )}
 
           <div className="ai-overlay__steps">
-            {(showTranscript || finalTranscript) && (
-              <div className={`ai-overlay__step ${displayTranscript || interim ? 'is-done' : ''}`}>
+            {showTranscript && (
+              <div
+                className={`ai-overlay__step ${displayTranscript || interim ? 'is-done' : ''}`}
+              >
                 <div className="ai-overlay__step-title">Texto transcrito</div>
                 <p className="ai-overlay__step-body ai-overlay__transcript">
                   {displayTranscript && <span>{displayTranscript} </span>}
-                  {interim && <span className="ai-overlay__interim">{interim}</span>}
-                  {listening && !displayTranscript && !interim && (
-                    <span className="ai-overlay__placeholder">Habla ahora…</span>
+                  {interim && (
+                    <span className="ai-overlay__interim">{interim}</span>
                   )}
-                  {listening && <span className="ai-overlay__caret" aria-hidden="true" />}
+                  {listening && !displayTranscript && !interim && (
+                    <span className="ai-overlay__placeholder">
+                      Habla ahora…
+                    </span>
+                  )}
+                  {listening && (
+                    <span className="ai-overlay__caret" aria-hidden="true" />
+                  )}
                 </p>
               </div>
             )}
 
             {aiResult && (
               <div className="ai-overlay__step is-done">
-                <div className="ai-overlay__step-title">Interpretación de la IA</div>
+                <div className="ai-overlay__step-title">
+                  Interpretación de la IA
+                </div>
                 <div className="ai-overlay__step-body">
                   <div className="ai-overlay__action">
                     <span className="ai-overlay__badge">Acción</span>
                     <strong>{formatActionLabel(aiResult.action)}</strong>
                   </div>
-                  {aiResult.options && Object.keys(aiResult.options).length > 0 && (
+                  {optionEntries.length > 0 && (
                     <dl className="ai-overlay__params">
-                      {Object.entries(aiResult.options).map(([key, value]) => (
+                      {optionEntries.map(([key, value]) => (
                         <div key={key} className="ai-overlay__param">
-                          <dt>{key}</dt>
-                          <dd>{formatValue(value)}</dd>
+                          <dt>{formatOptionLabel(key)}</dt>
+                          <dd>{formatOptionValue(key, value)}</dd>
                         </div>
                       ))}
                     </dl>
@@ -216,19 +335,27 @@ export default function AIOverlay({ zone }: AIOverlayProps) {
               </div>
             )}
 
-            {routeResult && (
-              <div className={`ai-overlay__step ${routeResult.ok ? 'is-done' : 'is-error'}`}>
+            {actionResult && (
+              <div
+                className={`ai-overlay__step ${actionResult.ok ? 'is-done' : 'is-error'}`}
+              >
                 <div className="ai-overlay__step-title">Ruta</div>
                 <div className="ai-overlay__step-body">
                   <p className="ai-overlay__confirm">
-                    {routeResult.ok ? '✓ ' : '✕ '}
-                    {routeResult.message}
+                    {actionResult.ok ? '✓ ' : '✕ '}
+                    {actionResult.message}
                   </p>
-                  {(routeResult.points != null || routeResult.distance != null) && (
+                  {(actionResult.points != null ||
+                    actionResult.distance != null) && (
                     <p className="ai-overlay__meta">
-                      {routeResult.points != null && <span>{routeResult.points} puntos</span>}
-                      {routeResult.points != null && routeResult.distance != null && <span> · </span>}
-                      {routeResult.distance != null && <span>coste {routeResult.distance}</span>}
+                      {actionResult.points != null && (
+                        <span>{actionResult.points} puntos</span>
+                      )}
+                      {actionResult.points != null &&
+                        actionResult.distance != null && <span> · </span>}
+                      {actionResult.distance != null && (
+                        <span>coste {actionResult.distance}</span>
+                      )}
                     </p>
                   )}
                 </div>
@@ -252,11 +379,22 @@ export default function AIOverlay({ zone }: AIOverlayProps) {
         }}
         disabled={!supported || busy}
         aria-pressed={listening}
-        aria-label={listening ? 'Detener dictado por voz' : 'Abrir asistente de voz'}
-        title={supported ? 'Asistente de voz' : 'Tu navegador no soporta reconocimiento de voz'}
+        aria-label={
+          listening ? 'Detener dictado por voz' : 'Abrir asistente de voz'
+        }
+        title={
+          supported
+            ? 'Asistente de voz'
+            : 'Tu navegador no soporta reconocimiento de voz'
+        }
       >
         {listening && <span className="ai-overlay__pulse" aria-hidden="true" />}
-        <img className="ai-overlay__icon" src={logoMaya} alt="" aria-hidden="true" />
+        <img
+          className="ai-overlay__icon"
+          src={logoMaya}
+          alt=""
+          aria-hidden="true"
+        />
       </button>
     </div>
   )

@@ -21,8 +21,11 @@ class PathRequest(BaseModel):
         default=None,
         gt=0,
         description="Máxima diferencia de altura permitida entre celdas vecinas; si se supera se bloquea la conexión.",
-    ),
-    multipliers: tuple[int]
+    )
+    multipliers: tuple[float, float, float] = Field(
+        default=(1.0, 5.0, 50.0),
+        description="Tres multiplicadores de altura distintos.",
+    )
 
 
 @router.post("/path")

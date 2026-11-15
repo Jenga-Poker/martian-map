@@ -33,6 +33,42 @@ def _clean(value: str) -> str:
     return (value or "").strip().strip('"')
 
 
+def _normalize_rovers(
+    rovers: list[dict[str, Any]] | None,
+) -> list[dict[str, str]]:
+    """Normaliza los rovers enviados por el cliente y mantiene un fallback."""
+    normalized: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    for rover in rovers or []:
+        if not isinstance(rover, dict):
+            continue
+        rover_id = _clean(str(rover.get("id", "")))
+        if not rover_id or rover_id in seen:
+            continue
+        seen.add(rover_id)
+        normalized.append(
+            {
+                "id": rover_id,
+                "name": _clean(str(rover.get("name", ""))) or rover_id,
+                "description": _clean(str(rover.get("description", ""))),
+            }
+        )
+
+    if normalized:
+        return normalized
+
+    return [
+        {
+            "id": option,
+            "name": option.replace("_", " ").title(),
+            "description": "",
+        }
+        for option in ROVER_OPTIONS
+        if option != "not_specified"
+    ]
+
+
 def _load_zone_locations(zone: str | None) -> list[str]:
     if not zone or not LOCATIONS_FILE.exists():
         return []
@@ -112,18 +148,32 @@ async def _select_action(instruction: str) -> str:
     return _pick_choice(result, "action")
 
 
-async def _extract_options(action: str, instruction: str, zone: str | None = None) -> dict[str, Any]:
+async def _extract_options(
+    action: str,
+    instruction: str,
+    zone: str | None = None,
+    rovers: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     if action != "navigate_to":
         return {}
 
     location_names = _load_zone_locations(zone)
     end_options = location_names + ["not_specified"]
 
+    rover_list = _normalize_rovers(rovers)
+    rover_ids = [rover["id"] for rover in rover_list]
+    rover_options = rover_ids + ["not_specified"]
     rover_criteria = {
-        "rover 1": "The user wants to travel using rover 1.",
-        "rover 2": "The user wants to travel using rover 2.",
-        "not_specified": "The rover is not mentioned or unclear.",
+        rover["id"]: (
+            f"The user wants to travel using {rover['name']}."
+            + (f" {rover['description']}" if rover["description"] else "")
+        )
+        for rover in rover_list
     }
+    rover_criteria["not_specified"] = (
+        "The rover is not mentioned or unclear."
+    )
+
     end_criteria = {
         name: f"Destination is the location named '{name}'."
         for name in location_names
@@ -139,7 +189,7 @@ async def _extract_options(action: str, instruction: str, zone: str | None = Non
                 "Which rover should perform the task? "
                 "Choose not_specified if not mentioned or unclear."
             ),
-            "options": ROVER_OPTIONS,
+            "options": rover_options,
             "criteria": rover_criteria,
         },
         "end": {
@@ -156,25 +206,41 @@ async def _extract_options(action: str, instruction: str, zone: str | None = Non
     state = {
         "instruction": instruction,
         "action": action,
-        "available_rovers": ["rover 1", "rover 2"],
+        "available_rovers": [
+            {"id": rover["id"], "name": rover["name"]}
+            for rover in rover_list
+        ],
         "available_locations": location_names,
     }
 
     result = await systemone(state, questions)
 
-    rover = _pick_choice(result, "rover")
+    rover_choice = _pick_choice(result, "rover")
+    rover_by_name = {
+        rover["name"].lower(): rover["id"] for rover in rover_list
+    }
+    if rover_choice not in rover_ids:
+        rover_choice = rover_by_name.get((rover_choice or "").lower())
+    rover = rover_choice if rover_choice in rover_ids else None
+
     end = _pick_choice(result, "end")
 
     return {
-        "rover": rover if rover != "not_specified" else None,
+        "rover": rover,
         "end": end if end != "not_specified" else None,
     }
 
 
-async def interpret_instruction(instruction: str, zone: str | None = None) -> dict[str, Any]:
+async def interpret_instruction(
+    instruction: str,
+    zone: str | None = None,
+    rovers: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Interpreta una instrucción en dos pasos: identificar acción y extraer parámetros."""
     action = await _select_action(instruction)
-    options = await _extract_options(action, instruction, zone=zone)
+    options = await _extract_options(
+        action, instruction, zone=zone, rovers=rovers
+    )
     print("RESULT", action, options)
     return {"action": action, "options": options}
 

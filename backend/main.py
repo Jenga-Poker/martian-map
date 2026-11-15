@@ -28,7 +28,7 @@ app.include_router(path_router)
 
 try:
     with open("../data/locations.csv", "x") as file:
-        file.write("NAME;LAT;LON;HEIGHT;ZONE\n\"Curiosity Rover\";81143633.351;-285153.293;0;\"gale\"\n\"Perseverance Rover\";1777.23320007;18.435573502;0;\"jezero\"")
+        file.write("NAME;LAT;LON;HEIGHT;ZONE\n\"Curiosity Rover\";4.79;137.39;0;\"gale\"\n\"Perseverance Rover\";18.447;77.402;0;\"jezero\"")
 except FileExistsError:
     print("File already exists. Skipping creation.")
 
