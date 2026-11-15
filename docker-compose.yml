@@ -1,15 +1,42 @@
 services:
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  ollama-pull:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    entrypoint: ["ollama", "pull", "laya:421m-typed-decisions-bf16"]
+    restart: "no"
+
   backend:
     build: ./backend
     ports:
       - "8000:8000"
     volumes:
-      - ./data:/data
+      - ./scripts:/app/scripts:ro
+      - ./data:/app/data
     environment:
-      - MESSAGE_FILE=/data/message.txt
-      - OLLAMA_URL=http://host.docker.internal:11434/
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - MODEL_OLLAMA=laya:421m-typed-decisions-bf16
+      - MESSAGE_FILE=/app/data/message.txt
+      - OLLAMA_URL=http://ollama:11434
+    depends_on:
+      ollama:
+        condition: service_healthy
+      ollama-pull:
+        condition: service_completed_successfully
 
   frontend:
     build: ./frontend
@@ -22,3 +49,6 @@ services:
       - VITE_API_URL=http://localhost:8000
     depends_on:
       - backend
+
+volumes:
+  ollama_data:

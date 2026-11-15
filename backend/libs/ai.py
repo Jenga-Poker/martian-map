@@ -7,11 +7,11 @@ from typing import Any
 import httpx
 from dotenv import load_dotenv
 
-from config import MODEL
-
 load_dotenv()
 
 # Compatibilidad: aceptar OLLAMA_URL o OLLAMA_HOST
+OLLAMA_MODEL = os.getenv("MODEL_OLLAMA") or "LUIS BERNAL"
+
 OLLAMA_URL = (
     os.getenv("OLLAMA_URL")
     or os.getenv("OLLAMA_HOST")
@@ -95,7 +95,7 @@ async def systemone(state: Any, questions: dict[str, dict[str, Any]]) -> dict[st
     """Envía una petición al endpoint /v1/systemone de un modelo de decisión."""
     url = f"{OLLAMA_URL}/v1/systemone"
     payload: dict[str, Any] = {
-        "model": MODEL,
+        "model": OLLAMA_MODEL,
         "state": state,
         "questions": questions,
     }
