@@ -407,7 +407,7 @@ export default function Partial() {
         </>
       )}
 
-      <AIOverlay />
+      <AIOverlay zone={poi.id} />
     </main>
   )
 }

@@ -1,1 +1,1 @@
-MODEL = "lfm3:latest"
+MODEL = "laya:421m-typed-decisions-bf16"

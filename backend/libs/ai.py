@@ -1,6 +1,7 @@
+import csv
 import json
 import os
-import re
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -19,52 +20,51 @@ OLLAMA_URL = (
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")
 
 ACTIONS = {
-    "generate_path": {
-        "description": "Calculate the shortest route/path between two points in an area (DEM .tif file).",
-        "params_prompt": (
-            "Extract the parameters for the generate_path action.\n"
-            "Return ONLY a valid JSON object with these keys:\n"
-            '- "zone": name of the zone/file without extension if possible (string)\n'
-            '- "start": {"row": <integer>, "col": <integer>}\n'
-            '- "end": {"row": <integer>, "col": <integer>}\n'
-            '- "margin": integer (optional, default 50)\n\n'
-            "Rules:\n"
-            "- Use only the information provided by the user.\n"
-            "- If a parameter is missing, use null for that value (or 50 for margin).\n"
-            "- Do not add any text outside the JSON.\n\n"
-            "Example output:\n"
-            '{"zone":"jezero_dem_1m","start":{"row":100,"col":150},"end":{"row":800,"col":950},"margin":50}'
-        ),
+    "navigate_to": {
+        "description": "Calculates the shortest path from the user's location to another point.",
     }
 }
 
+ROVER_OPTIONS = ["rover 1", "rover 2", "not_specified"]
+LOCATIONS_FILE = Path(__file__).resolve().parents[2] / "data" / "locations.csv"
 
-async def generate(instructions: str, as_json: bool = False) -> Any:
-    """Envía instrucciones al servidor de Ollama y devuelve el resultado.
 
-    Args:
-        instructions: Texto con las instrucciones o prompt del usuario.
-        as_json: Si es True, solicita y parsea la respuesta como JSON.
+def _clean(value: str) -> str:
+    return (value or "").strip().strip('"')
 
-    Returns:
-        str cuando as_json es False, o un objeto (dict/list) cuando es True.
 
-    Raises:
-        httpx.HTTPStatusError: Si Ollama responde con un error HTTP.
-        ValueError: Si se solicita JSON pero la respuesta no es JSON válido.
-    """
-    url = f"{OLLAMA_URL}/api/generate"
+def _load_zone_locations(zone: str | None) -> list[str]:
+    if not zone or not LOCATIONS_FILE.exists():
+        return []
+    zone_name = zone.strip()
+    names: list[str] = []
+    try:
+        with LOCATIONS_FILE.open(newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f, delimiter=";", skipinitialspace=True)
+            for row in reader:
+                if not row:
+                    continue
+                row_zone = _clean(row.get("ZONE", ""))
+                if row_zone != zone_name:
+                    continue
+                name = _clean(row.get("NAME", ""))
+                if name and name not in names:
+                    names.append(name)
+    except Exception:
+        return []
+    return names
+
+
+async def systemone(state: Any, questions: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """Envía una petición al endpoint /v1/systemone de un modelo de decisión."""
+    url = f"{OLLAMA_URL}/v1/systemone"
     payload: dict[str, Any] = {
         "model": MODEL,
-        "prompt": instructions,
-        "stream": False,
-        "think": False
+        "state": state,
+        "questions": questions,
     }
-    
-    print(url, payload)
 
-    if as_json:
-        payload["format"] = "json"
+    print(json.dumps(payload, indent=4))
 
     headers = {}
     if OLLAMA_API_KEY:
@@ -72,74 +72,109 @@ async def generate(instructions: str, as_json: bool = False) -> Any:
 
     async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.post(url, json=payload, headers=headers)
-        response.raise_for_status()
+        if response.is_error:
+            detail = response.text
+            raise ValueError(
+                f"Error {response.status_code} en /v1/systemone: {detail}"
+            )
         data = response.json()
 
-    result_text = (data.get("response") or "").strip()
+    if not isinstance(data, dict):
+        raise ValueError("La respuesta de /v1/systemone no es un objeto JSON válido.")
 
-    if as_json:
-        try:
-            return json.loads(result_text)
-        except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"La respuesta del modelo no es un JSON válido: {result_text}"
-            ) from exc
-
-    return result_text
+    print(json.dumps(data, indent=4))
+    return data
 
 
-def _normalize_action(raw: str) -> str:
-    text = (raw or "").strip().strip("\"'`")
-    if text in ACTIONS:
-        return text
-    # Intentar extraer una acción conocida si el modelo añade texto extra
-    lowered = text.lower()
-    for action in ACTIONS:
-        if re.search(rf"\b{re.escape(action)}\b", lowered):
-            return action
-    # Fallback: primera palabra/identificador
-    match = re.search(r"[a-zA-Z_][a-zA-Z0-9_]*", text)
-    return match.group(0) if match else text
-
+def _pick_choice(result: dict[str, Any], key: str) -> str:
+    answers = result.get("answers", {}) if isinstance(result, dict) else {}
+    answer = answers.get(key) if isinstance(answers, dict) else None
+    choice = answer.get("choice") if isinstance(answer, dict) else None
+    return choice
 
 async def _select_action(instruction: str) -> str:
-    actions_list = "\n".join(
-        f"- {name}: {info['description']}" for name, info in ACTIONS.items()
-    )
-    prompt = (
-        "You are an action classifier. "
-        "Choose the action that best matches the user's instruction.\n\n"
-        "Available actions:\n"
-        f"{actions_list}\n\n"
-        f'User instruction: "{instruction}"\n\n'
-        "Respond ONLY with the exact action name. "
-        "Do not write explanations or additional punctuation."
-    )
-    raw = await generate(prompt, as_json=False)
-    return _normalize_action(str(raw))
+    action_options = list(ACTIONS.keys()) + ["not_specified"]
+    criteria = {name: info["description"] for name, info in ACTIONS.items()}
+    criteria["not_specified"] = "None of the available actions match the user request."
+    questions = {
+        "action": {
+            "type": "choice",
+            "instructions": (
+                "Choose the action that best matches the user's request. "
+                "Choose not_specified if no action matches."
+            ),
+            "options": action_options,
+            "criteria": criteria,
+        }
+    }
+    state = instruction
+    result = await systemone(state, questions)
+    return _pick_choice(result, "action")
 
 
-async def _extract_options(action: str, instruction: str) -> dict[str, Any]:
-    action_info = ACTIONS.get(action)
-    if not action_info:
+async def _extract_options(action: str, instruction: str, zone: str | None = None) -> dict[str, Any]:
+    if action != "navigate_to":
         return {}
 
-    prompt = (
-        f"{action_info['params_prompt']}\n\n"
-        f'User instruction: "{instruction}"\n\n'
-        "JSON output:"
+    location_names = _load_zone_locations(zone)
+    end_options = location_names + ["not_specified"]
+
+    rover_criteria = {
+        "rover 1": "The user wants to travel using rover 1.",
+        "rover 2": "The user wants to travel using rover 2.",
+        "not_specified": "The rover is not mentioned or unclear.",
+    }
+    end_criteria = {
+        name: f"Destination is the location named '{name}'."
+        for name in location_names
+    }
+    end_criteria["not_specified"] = (
+        "No valid destination location is mentioned."
     )
-    options = await generate(prompt, as_json=True)
-    if not isinstance(options, dict):
-        raise ValueError("Extracted parameters must be a JSON object.")
-    return options
+
+    questions = {
+        "rover": {
+            "type": "choice",
+            "instructions": (
+                "Which rover should perform the task? "
+                "Choose not_specified if not mentioned or unclear."
+            ),
+            "options": ROVER_OPTIONS,
+            "criteria": rover_criteria,
+        },
+        "end": {
+            "type": "choice",
+            "instructions": (
+                "Which location is the route destination? "
+                "Choose only from the given locations, or not_specified if none match."
+            ),
+            "options": end_options,
+            "criteria": end_criteria,
+        },
+    }
+
+    state = {
+        "instruction": instruction,
+        "action": action,
+        "available_rovers": ["rover 1", "rover 2"],
+        "available_locations": location_names,
+    }
+
+    result = await systemone(state, questions)
+
+    rover = _pick_choice(result, "rover")
+    end = _pick_choice(result, "end")
+
+    return {
+        "rover": rover if rover != "not_specified" else None,
+        "end": end if end != "not_specified" else None,
+    }
 
 
-async def interpret_instruction(instruction: str) -> dict[str, Any]:
-    """Interpreta una instrucción en dos pasos: seleccionar acción y extraer parámetros."""
+async def interpret_instruction(instruction: str, zone: str | None = None) -> dict[str, Any]:
+    """Interpreta una instrucción en dos pasos: identificar acción y extraer parámetros."""
     action = await _select_action(instruction)
-    print(action)
-    options = await _extract_options(action, instruction)
-    print(options)
+    options = await _extract_options(action, instruction, zone=zone)
+    print("RESULT", action, options)
     return {"action": action, "options": options}
 
