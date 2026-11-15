@@ -415,14 +415,18 @@ export default function TerrainViewer({
       pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1
       raycaster.setFromCamera(pointer, camera)
       const ray = raycaster.ray
+      // Si la cámara está dentro de la caja, intersectBox devuelve la salida:
+      // hay que marchar desde el origen, no desde ese punto.
+      const insideBox = terrainBox.containsPoint(ray.origin)
       const entry = ray.intersectBox(terrainBox, rayA)
-      if (!entry) return null
-      const tStart = ray.origin.distanceTo(entry)
-      const marchLength = Math.max(maxDimension * 0.02, camera.position.distanceTo(entry) + maxDimension * 0.02)
-      const steps = 320
-      let previousT = tStart
+      if (!insideBox && !entry) return null
+      const entryT = !insideBox && entry ? ray.origin.distanceTo(entry) : 0
+      // Recorrer toda la caja evita fallos al mirar en diagonal o con zoom.
+      const marchLength = entryT + maxDimension * 2.5
+      const steps = 480
+      let previousT = entryT
       for (let step = 1; step <= steps; step += 1) {
-        const t = tStart + (marchLength * step) / steps
+        const t = entryT + (marchLength * step) / steps
         ray.at(t, rayC)
         const current = model.sampleAt(rayC.x, rayC.z, effectiveExaggeration(exaggerationRef.current), sample)
         if (current && rayC.y <= current.y) {
@@ -536,68 +540,15 @@ export default function TerrainViewer({
     const updateHover = () => {
       hoverFrame = 0
       if (!pointerInside) return
-      const rect = renderer.domElement.getBoundingClientRect()
-      if (rect.width === 0 || rect.height === 0) return
-      pointer.x = ((lastClientX - rect.left) / rect.width) * 2 - 1
-      pointer.y = -((lastClientY - rect.top) / rect.height) * 2 + 1
-      raycaster.setFromCamera(pointer, camera)
-      const ray = raycaster.ray
-
-      const entry = ray.intersectBox(terrainBox, rayA)
-      if (!entry) {
+      const hit = pickTerrain(lastClientX, lastClientY)
+      if (!hit) {
         ring.visible = false
         onHoverRef.current(null)
         return
       }
-
-      const tStart = ray.origin.distanceTo(entry)
-      const marchLength = Math.max(maxDimension * 0.02, camera.position.distanceTo(entry) + maxDimension * 0.02)
-      const steps = 320
-      let previousT = tStart
-
-      for (let step = 1; step <= steps; step += 1) {
-        const t = tStart + (marchLength * step) / steps
-        ray.at(t, rayC)
-        const current = model.sampleAt(
-          rayC.x,
-          rayC.z,
-          effectiveExaggeration(exaggerationRef.current),
-          sample,
-        )
-        if (current && rayC.y <= current.y) {
-          let lo = previousT
-          let hi = t
-          let hit = current
-          for (let iteration = 0; iteration < 12; iteration += 1) {
-            const midT = (lo + hi) / 2
-            ray.at(midT, rayA)
-            const refined = model.sampleAt(
-              rayA.x,
-              rayA.z,
-              effectiveExaggeration(exaggerationRef.current),
-              midSample,
-            )
-            if (refined && rayA.y <= refined.y) {
-              hi = midT
-              hit = refined
-            } else {
-              lo = midT
-            }
-          }
-
-          ray.at(hi, hitPoint)
-          const { lat, lon } = model.worldToGeo(hitPoint.x, hitPoint.z)
-
-          ring.position.set(hitPoint.x, hit.y + 0.03, hitPoint.z)
-          ring.visible = true
-          onHoverRef.current({ elevation: hit.elevation, lat, lon })
-          return
-        }
-        previousT = t
-      }
-
-      ring.visible = false
-      onHoverRef.current(null)
+      ring.position.set(hit.x, hit.y + 0.03, hit.z)
+      ring.visible = true
+      onHoverRef.current({ elevation: hit.elevation, lat: hit.lat, lon: hit.lon })
     }
 
     const onPointerMove = (event: PointerEvent) => {
@@ -615,30 +566,38 @@ export default function TerrainViewer({
 
     let downX = 0
     let downY = 0
+    let pointerDown = false
     const onPointerDown = (event: PointerEvent) => {
       downX = event.clientX
       downY = event.clientY
+      pointerDown = true
     }
-    const onClick = (event: MouseEvent) => {
-      if (astronautRef.current) return
-      if (!onAstronautSelectRef.current) return
+    const onPointerUp = (event: PointerEvent) => {
+      if (!pointerDown) return
+      pointerDown = false
+      // Solo el botón principal y sin arrastre: así no se coloca el
+      // astronauta al girar o desplazar la cámara.
+      if (event.button !== 0) return
       const dx = event.clientX - downX
       const dy = event.clientY - downY
       if (dx * dx + dy * dy > 36) return
+      const select = onAstronautSelectRef.current
+      if (!select) return
       const hit = pickTerrain(event.clientX, event.clientY)
       if (hit) {
-        onAstronautSelectRef.current({
-          lat: hit.lat,
-          lon: hit.lon,
-          elevation: hit.elevation,
-        })
+        // Permite recolocar al astronauta con un nuevo clic.
+        select({ lat: hit.lat, lon: hit.lon, elevation: hit.elevation })
       }
+    }
+    const onPointerCancel = () => {
+      pointerDown = false
     }
 
     renderer.domElement.addEventListener('pointermove', onPointerMove)
     renderer.domElement.addEventListener('pointerleave', onPointerLeave)
     renderer.domElement.addEventListener('pointerdown', onPointerDown)
-    renderer.domElement.addEventListener('click', onClick)
+    renderer.domElement.addEventListener('pointerup', onPointerUp)
+    renderer.domElement.addEventListener('pointercancel', onPointerCancel)
 
     const resize = () => {
       const { clientWidth, clientHeight } = mount
@@ -723,7 +682,8 @@ export default function TerrainViewer({
       renderer.domElement.removeEventListener('pointermove', onPointerMove)
       renderer.domElement.removeEventListener('pointerleave', onPointerLeave)
       renderer.domElement.removeEventListener('pointerdown', onPointerDown)
-      renderer.domElement.removeEventListener('click', onClick)
+      renderer.domElement.removeEventListener('pointerup', onPointerUp)
+      renderer.domElement.removeEventListener('pointercancel', onPointerCancel)
       if (hoverFrame) cancelAnimationFrame(hoverFrame)
       observer.disconnect()
       renderer.setAnimationLoop(null)

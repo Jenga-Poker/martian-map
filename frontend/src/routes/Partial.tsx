@@ -538,6 +538,9 @@ export default function Partial() {
                     <div style={{ fontSize: '0.75rem', color: 'var(--texto)' }}>
                       Elevación: {formatMeters(astronaut.elevation)}
                     </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--texto)', opacity: 0.75 }}>
+                      Haz clic en el terreno para moverlo
+                    </div>
                   </section>
                 )}
 
