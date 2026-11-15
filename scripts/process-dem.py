@@ -1,13 +1,13 @@
 
-"""Convierte un GeoTIFF de elevación de Marte en un heightmap web.
+"""Converts a Mars elevation GeoTIFF into a web heightmap.
 
-Uso:
+Usage:
     python backend/process_dem.py jezero_dem_1m.tif
 
-Opcional:
+Optional:
     python backend/process_dem.py dem.tif --pixel-size-meters 200
 
-Genera:
+Generates:
     public/mars_height.bin
     public/mars_height_meta.json
 """
@@ -37,7 +37,7 @@ OUT_DIR = ROOT / "public"
 
 
 def block_average(values, valid, out_size):
-    """Media por bloques ignorando nodata."""
+    """Block average ignoring nodata."""
     height, width = values.shape
 
     pad_h = math.ceil(height / out_size) * out_size - height
@@ -71,7 +71,7 @@ def block_average(values, valid, out_size):
 
 
 def fill_nan_nearest(values):
-    """Rellena huecos mediante vecinos válidos."""
+    """Fills gaps using valid neighbors."""
     filled = values.copy()
 
     for _ in range(12):
@@ -110,12 +110,12 @@ def fill_nan_nearest(values):
 
 def get_spatial_resolution(image, override=None):
     """
-    Obtiene la resolución espacial del GeoTIFF.
+    Gets the spatial resolution of the GeoTIFF.
 
-    Soporta:
-      - Coordenadas geográficas en grados.
-      - Coordenadas proyectadas en metros.
-      - Resolución manual mediante argumentos.
+    Supports:
+      - Geographic coordinates in degrees.
+      - Projected coordinates in meters.
+      - Manual resolution via arguments.
     """
 
     tags = image.tag_v2
@@ -141,17 +141,17 @@ def get_spatial_resolution(image, override=None):
         scale_x = abs(float(pixel_scale[0]))
         scale_y = abs(float(pixel_scale[1]))
 
-        # Heurística para coordenadas geográficas en grados.
+        # Heuristic for geographic coordinates in degrees.
         geographic = scale_x < 1.0 and scale_y < 1.0
 
     else:
         raise ValueError(
-            "El GeoTIFF no contiene ModelPixelScaleTag. "
-            "Especifica --pixel-size-meters."
+            "The GeoTIFF does not contain ModelPixelScaleTag. "
+            "Specify --pixel-size-meters."
         )
 
     if geographic:
-        # Resolución expresada en grados.
+        # Resolution expressed in degrees.
         center_lat = (
             origin_y - image.height * scale_y / 2
         )
@@ -167,13 +167,13 @@ def get_spatial_resolution(image, override=None):
         mpp_y = scale_y * meters_per_degree_y
 
     else:
-        # Coordenadas proyectadas en metros.
+        # Projected coordinates in meters.
         center_lat = (
             origin_y - image.height * scale_y / 2
         ) * DEG_PER_METER
 
-        # En una proyección equirectangular, la distancia
-        # horizontal real depende de la latitud.
+        # In an equirectangular projection, the real horizontal
+        # distance depends on latitude.
         mpp_x = scale_x * math.cos(
             math.radians(center_lat)
         )
@@ -204,14 +204,14 @@ def main():
         "--pixel-size-meters",
         type=float,
         default=None,
-        help="Resolución horizontal manual en metros/píxel.",
+        help="Manual horizontal resolution in meters/pixel.",
     )
 
     parser.add_argument(
         "--pixel-size-y-meters",
         type=float,
         default=None,
-        help="Resolución vertical manual en metros/píxel.",
+        help="Manual vertical resolution in meters/pixel.",
     )
 
     args = parser.parse_args()
@@ -219,9 +219,9 @@ def main():
     src = Path(args.source)
 
     if not src.exists():
-        raise SystemExit(f"No se encontró el archivo: {src}")
+        raise SystemExit(f"File not found: {src}")
 
-    print(f"Leyendo {src.name} ...")
+    print(f"Reading {src.name} ...")
 
     image = Image.open(src)
 
@@ -250,15 +250,15 @@ def main():
     mpp_y = spatial["metersPerPixelY"]
 
     if mpp_x <= 0 or mpp_y <= 0:
-        raise SystemExit("Resolución espacial inválida.")
+        raise SystemExit("Invalid spatial resolution.")
 
-    print(f"  Resolución X: {mpp_x:.4f} m/px")
-    print(f"  Resolución Y: {mpp_y:.4f} m/px")
+    print(f"  Resolution X: {mpp_x:.4f} m/px")
+    print(f"  Resolution Y: {mpp_y:.4f} m/px")
 
     valid = np.isfinite(values) & (values > -1.0e30)
 
     if not valid.any():
-        raise SystemExit("El ráster no contiene datos válidos.")
+        raise SystemExit("The raster does not contain valid data.")
 
     rows = np.flatnonzero(valid.any(axis=1))
     cols = np.flatnonzero(valid.any(axis=0))
@@ -269,14 +269,14 @@ def main():
     coverage = float(valid[r0:r1, c0:c1].mean())
 
     print(
-        f"  Área válida: x={c0}..{c1}, "
+        f"  Valid area: x={c0}..{c1}, "
         f"y={r0}..{r1} ({coverage:.1%})"
     )
 
     cropped = values[r0:r1, c0:c1]
     mask = valid[r0:r1, c0:c1]
 
-    print(f"Reduciendo a {OUT_SIZE}x{OUT_SIZE} ...")
+    print(f"Downsampling to {OUT_SIZE}x{OUT_SIZE} ...")
 
     coarse = block_average(cropped, mask, OUT_SIZE)
 
@@ -316,18 +316,18 @@ def main():
 
     quantized.astype("<u2").tofile(height_path)
 
-    # Dimensiones físicas del área recortada.
+    # Physical dimensions of the cropped area.
     width_px = c1 - c0
     height_px = r1 - r0
 
     width_m = width_px * mpp_x
     height_m = height_px * mpp_y
 
-    # Resolución espacial de cada píxel del heightmap final.
+    # Spatial resolution of each pixel of the final heightmap.
     output_mpp_x = width_m / OUT_SIZE
     output_mpp_y = height_m / OUT_SIZE
 
-    # Georreferenciación.
+    # Georeferencing.
     origin_x = spatial["originX"]
     origin_y = spatial["originY"]
 
@@ -367,17 +367,17 @@ def main():
         "colorMin": round(p2, 2),
         "colorMax": round(p98, 2),
 
-        # Dimensiones físicas reales.
+        # Real physical dimensions.
         "widthMeters": round(width_m, 3),
         "heightMeters": round(height_m, 3),
 
-        # Resolución original.
+        # Original resolution.
         "sourcePixelSizeMeters": {
             "x": round(mpp_x, 6),
             "y": round(mpp_y, 6),
         },
 
-        # Resolución del heightmap 1024x1024.
+        # Resolution of the 1024x1024 heightmap.
         "metersPerPixel": {
             "x": round(output_mpp_x, 6),
             "y": round(output_mpp_y, 6),
@@ -418,16 +418,16 @@ def main():
         encoding="utf-8",
     )
 
-    print("\n--- RESULTADO ---")
+    print("\n--- RESULT ---")
 
     print(
-        f"Elevación: {elevation_min:.2f} m .. "
+        f"Elevation: {elevation_min:.2f} m .. "
         f"{elevation_max:.2f} m"
     )
 
     print(
-        f"Dimensiones: {width_m:.2f} x "
-        f"{height_m:.2f} metros"
+        f"Dimensions: {width_m:.2f} x "
+        f"{height_m:.2f} meters"
     )
 
     print(
@@ -436,12 +436,12 @@ def main():
     )
 
     print(
-        f"Centro: {meta['center']['lat']:.4f}°N "
+        f"Center: {meta['center']['lat']:.4f}°N "
         f"{meta['center']['lon']:.4f}°E"
     )
 
-    print(f"\nEscrito: {height_path}")
-    print(f"Escrito: {meta_path}")
+    print(f"\nWritten: {height_path}")
+    print(f"Written: {meta_path}")
 
 
 if __name__ == "__main__":

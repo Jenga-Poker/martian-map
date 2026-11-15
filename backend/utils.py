@@ -11,7 +11,7 @@ def _load_zone_locations(zone: str | None) -> list[str]:
     if not zone:
         return []
     if not LOCATIONS_FILE.exists():
-        print(f"[utils] No existe el archivo de ubicaciones: {LOCATIONS_FILE}")
+        print(f"[utils] Locations file does not exist: {LOCATIONS_FILE}")
         return []
     zone_name = zone.strip()
     names: list[str] = []

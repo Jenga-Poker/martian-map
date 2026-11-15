@@ -4,9 +4,9 @@ export type Poi = {
   lat: number;
   lon: number;
   description: string;
-  /** Carpeta dentro de public/terrain/ que contiene el modelo del POI. */
+  /** Folder inside public/terrain/ that contains the POI model. */
   terrainDir: string;
-  /** Nombre que se muestra sobre el visor del terreno. */
+  /** Name shown above the terrain viewer. */
   terrainLabel: string;
 };
 
@@ -19,7 +19,7 @@ export const POIS: Poi[] = [
     description:
       "Landing site of NASA's Perseverance rover. An ancient river delta preserving clues to past microbial life.",
     terrainDir: "crater_jezero",
-    terrainLabel: "Marte · Cráter Jezero",
+    terrainLabel: "Mars · Jezero Crater",
   },
   {
     id: "gale",
@@ -29,7 +29,7 @@ export const POIS: Poi[] = [
     description:
       "Explored by the Curiosity rover. Home to Mount Sharp, a layered mountain recording Mars' climate history.",
     terrainDir: "crater_gale",
-    terrainLabel: "Marte · Cráter Gale",
+    terrainLabel: "Mars · Gale Crater",
   },
   {
     id: "valles",
@@ -39,7 +39,7 @@ export const POIS: Poi[] = [
     description:
       "One of the largest canyon systems in the solar system, stretching over 4,000 km across the Martian equator.",
     terrainDir: "valles_marineris",
-    terrainLabel: "Marte · Valles Marineris",
+    terrainLabel: "Mars · Valles Marineris",
   },
 ];
 

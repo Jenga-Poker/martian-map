@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 router = APIRouter(tags=["distance"])
 
-# Lantejuela, Sevilla (España)
+# Lantejuela, Seville (Spain)
 LANTEJUELA_LAT = 37.3536
 LANTEJUELA_LON = -5.2247
 
@@ -20,17 +20,17 @@ MARS_OBLIQUITY_DEG = 25.19
 
 
 class MarsPoint(BaseModel):
-    lat: float = Field(..., ge=-90, le=90, description="Latitud del punto en Marte (grados)")
-    lon: float = Field(..., ge=-180, le=180, description="Longitud del punto en Marte (grados)")
-    height_km: float = Field(0.0, description="Altura sobre la superficie de Marte en km")
+    lat: float = Field(..., ge=-90, le=90, description="Latitude of the point on Mars (degrees)")
+    lon: float = Field(..., ge=-180, le=180, description="Longitude of the point on Mars (degrees)")
+    height_km: float = Field(0.0, description="Height above the surface of Mars in km")
 
 
 class DistanceToLantejuelaRequest(BaseModel):
-    point: MarsPoint = Field(..., description="Punto de origen en Marte")
+    point: MarsPoint = Field(..., description="Origin point on Mars")
     mars_time: str = Field(
         ...,
         min_length=1,
-        description="Tiempo para el cálculo orbital (ISO 8601 UTC, ej. 2026-11-15T12:00:00Z)",
+        description="Time for the orbital calculation (ISO 8601 UTC, e.g. 2026-11-15T12:00:00Z)",
     )
 
 
@@ -188,7 +188,7 @@ def _mars_surface_ecliptic(lat_deg, lon_deg, height_km, jd, d):
 
 @router.post("/distance-to-lantejuela")
 async def distance_to_lantejuela(request: DistanceToLantejuelaRequest):
-    """Calcula la distancia en el espacio entre un punto en Marte y Lantejuela (Sevilla) en un tiempo dado."""
+    """Computes the distance in space between a point on Mars and Lantejuela (Seville) at a given time."""
     try:
         dt = _parse_time(request.mars_time)
     except ValueError as exc:

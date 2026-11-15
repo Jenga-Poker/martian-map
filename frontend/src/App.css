@@ -1,5 +1,5 @@
 :root {
-  --lado-esquina: 8rem;   /* ancho de la leyenda y del botón */
+  --lado-esquina: 8rem;   /* width of the legend and the button */
 }
 .mars-map {
   position: fixed;
@@ -26,7 +26,7 @@
   cursor: grabbing;
 }
 
-/* Loading: componente común (Loading.tsx) */
+/* Loading: shared component (Loading.tsx) */
 
 .mars-overlay {
   position: absolute;
@@ -455,7 +455,7 @@
   background: var(--acento);
 }
 
-/* .terrain-action reemplazado por .btn en SidePanel action */
+/* .terrain-action replaced by .btn in SidePanel action */
 
 .terrain-hint {
   margin: 0;
@@ -640,7 +640,7 @@
   color: var(--texto);
 }
 
-/* Dictado por voz en la vista parcial */
+/* Voice dictation in the partial view */
 .speech-dictation {
   position: absolute;
   right: 1rem;

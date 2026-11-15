@@ -183,7 +183,7 @@ export default function TerrainViewer({
         powerPreference: 'high-performance',
       })
     } catch {
-      onErrorRef.current('Tu navegador no pudo iniciar WebGL.')
+      onErrorRef.current('Your browser could not start WebGL.')
       return
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -292,8 +292,8 @@ export default function TerrainViewer({
     pinGroup.name = 'location-pins'
     scene.add(pinGroup)
 
-    // Los nombres se dibujan como etiquetas HTML sobre el canvas para que se
-    // lean nítidos y mantengan un tamaño constante en pantalla.
+    // Names are drawn as HTML labels over the canvas so they stay crisp
+    // and keep a constant on-screen size.
     const pinLabelLayer = document.createElement('div')
     pinLabelLayer.className = 'terrain-pin-label-layer'
     mount.appendChild(pinLabelLayer)
@@ -412,13 +412,13 @@ export default function TerrainViewer({
       pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1
       raycaster.setFromCamera(pointer, camera)
       const ray = raycaster.ray
-      // Si la cámara está dentro de la caja, intersectBox devuelve la salida:
-      // hay que marchar desde el origen, no desde ese punto.
+      // If the camera is inside the box, intersectBox returns the exit point:
+      // we must march from the origin, not from that point.
       const insideBox = terrainBox.containsPoint(ray.origin)
       const entry = ray.intersectBox(terrainBox, rayA)
       if (!insideBox && !entry) return null
       const entryT = !insideBox && entry ? ray.origin.distanceTo(entry) : 0
-      // Recorrer toda la caja evita fallos al mirar en diagonal o con zoom.
+      // Marching across the whole box avoids failures when looking diagonally or with zoom.
       const marchLength = entryT + maxDimension * 2.5
       const steps = 480
       let previousT = entryT

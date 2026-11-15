@@ -9,28 +9,28 @@ router = APIRouter(tags=["path"])
 
 
 class Coordinate(BaseModel):
-    lat: float = Field(..., description="Latitud en grados")
-    lon: float = Field(..., description="Longitud en grados")
+    lat: float = Field(..., description="Latitude in degrees")
+    lon: float = Field(..., description="Longitude in degrees")
 
 
 class PathRequest(BaseModel):
-    zone: str = Field(..., description="Nombre del archivo/zona dentro de data/*.tif")
+    zone: str = Field(..., description="File/zone name inside data/*.tif")
     start: Coordinate
     end: Coordinate
     max_height_diff: float | None = Field(
         default=None,
         gt=0,
-        description="Máxima diferencia de altura permitida entre celdas vecinas; si se supera se bloquea la conexión.",
+        description="Maximum height difference allowed between neighboring cells; if exceeded, the connection is blocked.",
     )
     multipliers: tuple[float, float, float] = Field(
         default=(1.0, 5.0, 50.0),
-        description="Tres multiplicadores de altura distintos.",
+        description="Three distinct height multipliers.",
     )
 
 
 @router.post("/path")
 async def calculate_path(request: PathRequest):
-    """Calcula el camino más corto entre dos coordenadas geográficas en un DEM de data/."""
+    """Computes the shortest path between two geographic coordinates on a DEM from data/."""
     
     try:
         result = await asyncio.to_thread(

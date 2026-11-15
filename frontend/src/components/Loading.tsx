@@ -4,7 +4,7 @@ type LoadingProps = {
 };
 
 export default function Loading({
-  title = "Cargando",
+  title = "Loading",
   subtitle,
 }: LoadingProps) {
   return (

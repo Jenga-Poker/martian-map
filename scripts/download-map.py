@@ -19,24 +19,24 @@ os.makedirs("data", exist_ok=True)
 
 for url, archivo_destino in download:
   if os.path.exists(archivo_destino):
-    print(f"{archivo_destino} ya existe, se omite")
+    print(f"{archivo_destino} already exists, skipping")
     continue
 
-  print(f"Iniciando descarga de {archivo_destino}...")
+  print(f"Starting download of {archivo_destino}...")
   archivo_temporal = archivo_destino + ".part"
   try:
     with requests.get(url, stream=True) as respuesta:
       respuesta.raise_for_status()
       with open(archivo_temporal, "wb") as f:
-        # Descarga en bloques de 8 MB para no llenar la memoria RAM
+        # Download in 8 MB chunks to avoid filling up RAM
         for chunk in respuesta.iter_content(chunk_size=8 * 1024 * 1024):
           if chunk:
             f.write(chunk)
-    # Solo se renombra cuando la descarga terminó completa
+    # Only rename once the download has fully finished
     os.replace(archivo_temporal, archivo_destino)
   except BaseException:
     if os.path.exists(archivo_temporal):
       os.remove(archivo_temporal)
     raise
 
-  print(f"Descarga completada de {archivo_destino}")
+  print(f"Download completed for {archivo_destino}")

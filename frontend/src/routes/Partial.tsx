@@ -345,7 +345,7 @@ export default function Partial() {
 
       if (isDistanceToEarthAction) {
         if (!data || !model) {
-          return { ok: false, message: 'El terreno aún no está cargado.' }
+          return { ok: false, message: 'Terrain is not loaded yet.' }
         }
 
         const point = astronaut
@@ -402,7 +402,7 @@ export default function Partial() {
 
       if (isAddLocationAction) {
         if (!data || !model) {
-          return { ok: false, message: 'El terreno aún no está cargado.' }
+          return { ok: false, message: 'Terrain is not loaded yet.' }
         }
 
         const targetPos = hover
@@ -415,7 +415,7 @@ export default function Partial() {
           return {
             ok: false,
             message:
-              'Mueve el cursor sobre el terreno para seleccionar la posición de la nueva ubicación.',
+              'Move the cursor over the terrain to select the position of the new location.',
           }
         }
 
@@ -702,13 +702,13 @@ export default function Partial() {
                 {astronaut && (
                   <section>
                     <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--acento)', marginBottom: '0.25rem' }}>
-                      Posición seleccionada
+                      Selected position
                     </div>
                     <div style={{ fontSize: '0.78rem', color: 'var(--texto)' }}>
                       {formatCoord(astronaut.lat, 'N', 'S')} · {formatCoord(astronaut.lon, 'E', 'W')}
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--texto)' }}>
-                      Elevación: {formatMeters(astronaut.elevation)}
+                      Elevation: {formatMeters(astronaut.elevation)}
                     </div>
                   </section>
                 )}
@@ -716,7 +716,7 @@ export default function Partial() {
                 {routeData.length > 0 && (
                   <section style={{ display: 'grid', gap: '0.6rem' }}>
                     <div>
-                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--acento)', textTransform: 'uppercase' }}>Inicio</div>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--acento)', textTransform: 'uppercase' }}>Start</div>
                       <div style={{ fontSize: '0.82rem', color: 'var(--texto)' }}>Your position</div>
                       {routeStart && (
                         <div style={{ fontSize: '0.72rem', color: 'var(--texto)' }}>
@@ -725,7 +725,7 @@ export default function Partial() {
                       )}
                     </div>
                     <div>
-                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--acento)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Destino</div>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--acento)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Destination</div>
                       {routeChosen || zoneLocations.length === 0 ? (
                         <div style={{ fontSize: '0.82rem', color: 'var(--texto)' }}>{routeDestination ?? '—'}</div>
                       ) : (
@@ -756,7 +756,7 @@ export default function Partial() {
                     {!routeChosen && (
                       <div>
                         <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--acento)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
-                          Vehículo
+                          Vehicle
                         </div>
                         <select
                           value={selectedRoverId ?? ''}
@@ -787,7 +787,7 @@ export default function Partial() {
                     if (!astronaut) {
                       return (
                         <p style={{ margin: 0, fontSize: '0.82rem', lineHeight: 1.45, color: 'var(--texto)' }}>
-                          Selecciona un punto en el mapa o usa el asistente de voz para calcular una ruta.
+                          Select a point on the map or use the voice assistant to calculate a route.
                         </p>
                       )
                     }
@@ -977,7 +977,7 @@ export default function Partial() {
               </div>
             </SidePanel>
             <header className="partial-header">
-              <p className="partial-eyebrow">{poi.terrainLabel.replace('Marte ·', 'Mars ·')}</p>
+              <p className="partial-eyebrow">{poi.terrainLabel}</p>
               <dl className="partial-facts">
                 <div>
                   <dt>Area</dt>
@@ -1238,7 +1238,7 @@ export default function Partial() {
                 }}
               >
                 <div style={{ marginBottom: '0.35rem' }}>
-                  <strong>Destination:</strong> Lantejuela, Sevilla (España)
+                  <strong>Destination:</strong> Lantejuela, Seville (Spain)
                 </div>
                 <div style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--acento)' }}>
                   {distancePopup.distanceKm != null

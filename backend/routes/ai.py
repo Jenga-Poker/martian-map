@@ -13,7 +13,7 @@ class AIRequest(BaseModel):
 
 @router.post("/ai")
 async def ai_endpoint(request: AIRequest):
-    """Recibe una instrucción del usuario y devuelve la acción y parámetros interpretados."""
+    """Receives a user instruction and returns the interpreted action and parameters."""
     if not request.instruction.strip():
         raise HTTPException(status_code=400, detail="Instruction cannot be empty.")
 

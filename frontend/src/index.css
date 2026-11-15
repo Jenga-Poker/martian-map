@@ -31,7 +31,7 @@
 }
 
 :root {
-  /* Paleta nueva */
+  /* New palette */
   --linen: #fef5eb;
   --pitch-black: #090202;
   --spicy-paprika: #d56738;
@@ -44,7 +44,7 @@
   --acento: var(--atomic-tangerine);
   --peligro: var(--spicy-paprika);
 
-  /* Compatibilidad con estilos existentes */
+  /* Compatibility with existing styles */
   --espresso: var(--pitch-black);
   --burnt-rose: #3a1710;
   --burnt-rose-2: #5c2416;

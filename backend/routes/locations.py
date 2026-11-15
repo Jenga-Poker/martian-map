@@ -21,7 +21,7 @@ def _clean(value: str) -> str:
 def _read_locations():
     if not DATA_FILE.exists():
         raise HTTPException(
-            status_code=404, detail=f"No se encontró el archivo de ubicaciones: {DATA_FILE}"
+            status_code=404, detail=f"Locations file not found: {DATA_FILE}"
         )
 
     try:
@@ -43,23 +43,23 @@ def _read_locations():
         return locations
     except ValueError as exc:
         raise HTTPException(
-            status_code=500, detail=f"Error al parsear ubicaciones: {exc}"
+            status_code=500, detail=f"Error parsing locations: {exc}"
         ) from exc
     except Exception as exc:
         raise HTTPException(
-            status_code=500, detail=f"Error al leer ubicaciones: {exc}"
+            status_code=500, detail=f"Error reading locations: {exc}"
         ) from exc
 
 
 @router.get("/locations")
 async def get_locations():
-    """Devuelve todos los puntos almacenados en data/locations.csv."""
+    """Returns all points stored in data/locations.csv."""
     return {"locations": _read_locations()}
 
 
 @router.get("/locations/{zone}")
 async def get_locations_by_zone(zone: str):
-    """Devuelve los puntos de data/locations.csv filtrados por zona."""
+    """Returns the points from data/locations.csv filtered by zone."""
     zone_name = zone.strip()
     locations = [
         location
@@ -70,22 +70,22 @@ async def get_locations_by_zone(zone: str):
 
 
 class LocationCreate(BaseModel):
-    name: str = Field(..., min_length=1, description="Nombre del punto")
-    lat: float = Field(..., description="Latitud en grados")
-    lon: float = Field(..., description="Longitud en grados")
-    zone: str = Field(..., min_length=1, description="Zona/DEM del que obtener la altura")
+    name: str = Field(..., min_length=1, description="Name of the point")
+    lat: float = Field(..., description="Latitude in degrees")
+    lon: float = Field(..., description="Longitude in degrees")
+    zone: str = Field(..., min_length=1, description="Zone/DEM from which to get the height")
 
 
 @router.post("/location")
 @router.post("/locations")
 async def create_location(request: LocationCreate):
-    """Obtiene la altura desde el DEM de la zona para las coordenadas dadas y guarda el punto en data/locations.csv."""
+    """Gets the height from the zone DEM for the given coordinates and saves the point to data/locations.csv."""
     name = request.name.strip()
     zone = request.zone.strip()
     if not name:
-        raise HTTPException(status_code=400, detail="El nombre no puede estar vacío.")
+        raise HTTPException(status_code=400, detail="The name cannot be empty.")
     if not zone:
-        raise HTTPException(status_code=400, detail="La zona no puede estar vacía.")
+        raise HTTPException(status_code=400, detail="The zone cannot be empty.")
 
     try:
         dem_path = resolve_preprocessed_file(zone)
@@ -110,20 +110,20 @@ async def create_location(request: LocationCreate):
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"La coordenada ({request.lat}, {request.lon}) está fuera del área del DEM "
-                    f"(extensión del raster: {bounds})."
+                    f"The coordinate ({request.lat}, {request.lon}) is outside the DEM area "
+                    f"(raster extent: {bounds})."
                 ),
             )
 
         height_value = float(dem[row, col])
         if nodata is not None and height_value == nodata:
-            raise HTTPException(status_code=400, detail="La coordenada cae en un valor nodata del DEM.")
+            raise HTTPException(status_code=400, detail="The coordinate falls on a nodata value in the DEM.")
         if not np.isfinite(height_value) or height_value <= -9000.0:
-            raise HTTPException(status_code=400, detail="La coordenada no tiene una altura válida en el DEM.")
+            raise HTTPException(status_code=400, detail="The coordinate does not have a valid height in the DEM.")
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Error al obtener la altura: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"Error getting the height: {exc}") from exc
 
     try:
         DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -142,7 +142,7 @@ async def create_location(request: LocationCreate):
                 writer.writerow(["NAME", "LAT", "LON", "HEIGHT", "ZONE"])
             writer.writerow([name, request.lat, request.lon, round(height_value, 4), zone])
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Error al guardar la ubicación: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"Error saving the location: {exc}") from exc
 
     return {
         "location": {

@@ -45,7 +45,7 @@ export function normalizeTerrainMeta(meta: TerrainMeta): TerrainMeta {
 export type TerrainData = {
   meta: TerrainMeta
   heights: Uint16Array
-  /** Capa opcional de rocosidad THEMIS: 0..254 = fracción, 255 = sin datos. */
+  /** Optional THEMIS rockiness layer: 0..254 = fraction, 255 = no data. */
   rocky: Uint8Array | null
 }
 
@@ -55,7 +55,7 @@ export type HoverInfo = {
   lon: number
 }
 
-/** Paleta de elevación basada en los rojos de la app, de sombra a cima iluminada. */
+/** Elevation palette based on the app's reds, from shadow to sunlit peak. */
 export const MARS_PALETTE = [
   '#5a1f14',
   '#7a2a1a',

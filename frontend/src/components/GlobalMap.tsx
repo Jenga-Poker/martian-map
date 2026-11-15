@@ -513,7 +513,7 @@ const GlobalMap = forwardRef<GlobalMapHandle, GlobalMapProps>(function GlobalMap
   return (
     <div className="mars-map">
       <div className="mars-canvas" ref={mountRef} />
-      {!ready && <Loading title="Cargando Marte" />}
+      {!ready && <Loading title="Loading Mars" />}
     </div>
   );
 });

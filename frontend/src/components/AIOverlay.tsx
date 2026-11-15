@@ -49,7 +49,7 @@ const OPTION_LABELS: Record<string, string> = {
 }
 
 function formatActionLabel(action: string): string {
-  if (!action) return 'No especificada'
+  if (!action) return 'Not specified'
   return ACTION_LABELS[action] || action.replace(/_/g, ' ')
 }
 
@@ -137,7 +137,7 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
   const mountedRef = useRef(true)
   const processingRef = useRef(false)
 
-  // Evitar actualizaciones después de desmontar el componente.
+  // Avoid updates after the component unmounts.
   useEffect(() => {
     mountedRef.current = true
 
@@ -148,7 +148,7 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
     }
   }, [])
 
-  // Procesamiento de la instrucción reconocida localmente.
+  // Processing of the locally recognized instruction.
   const processInstruction = useCallback(
     async (instruction: string) => {
       const normalizedInstruction = instruction.trim()
@@ -283,7 +283,7 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
     [onAction, zone],
   )
 
-  // Web Speech API: reconocimiento exclusivamente local.
+  // Web Speech API: exclusively local recognition.
   const {
     status: speechStatus,
     transcript,
@@ -300,7 +300,7 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
     },
   })
 
-  // Reset completo del asistente.
+  // Full reset of the assistant.
   const reset = useCallback(() => {
     abortRef.current?.abort()
     abortRef.current = null
@@ -484,7 +484,7 @@ export default function AIOverlay({ zone, onAction }: AIOverlayProps) {
                     <p className="ai-overlay__meta">
                       {actionResult.points != null && (
                         <span>
-                          {actionResult.points} puntos
+                          {actionResult.points} points
                         </span>
                       )}
 

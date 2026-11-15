@@ -1,4 +1,4 @@
-# Instalación
+# Installation
 
 ## Linux
 
@@ -6,13 +6,13 @@
 sudo systemctl edit ollama.service
 ```
 
-Añades: 
+Add:
 ```
 [Service]
 Environment="OLLAMA_HOST=0.0.0.0"
 ```
 
-Ejecutas:
+Run:
 ```
 sudo systemctl daemon-reload
 sudo systemctl restart ollama
@@ -24,7 +24,7 @@ sudo systemctl restart ollama
 ```
 ```
 
-Ponle esto a tu .env en backend:
+Put this in your .env in the backend:
 
 ```
 OLLAMA_URL=http://host.docker.internal:11434

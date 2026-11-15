@@ -1,15 +1,15 @@
-"""Convierte los rásteres THEMIS de rocosidad en capas alineadas con cada DEM.
+"""Converts THEMIS rockiness rasters into layers aligned with each DEM.
 
-Los GeoTIFF `rocky_*_themis_night.tif` usan 0 = no rocoso, 1 = rocoso
-y 255 = sin datos. Para poder superponerlos al terreno de 1024 x 1024
-se remuestrean al mismo encuadre geográfico que el DEM procesado.
+The `rocky_*_themis_night.tif` GeoTIFFs use 0 = not rocky, 1 = rocky
+and 255 = no data. To overlay them on the 1024 x 1024 terrain
+they are resampled to the same geographic framing as the processed DEM.
 
-Uso:
+Usage:
     python scripts/process-rocky.py
 
-Genera en frontend/public/terrain/<poi>/:
-    rocky.bin        uint8 1024x1024 (0..254 = fracción rocosa, 255 = sin datos)
-    rocky_meta.json  metadatos de la capa
+Generates in frontend/public/terrain/<poi>/:
+    rocky.bin        uint8 1024x1024 (0..254 = rocky fraction, 255 = no data)
+    rocky_meta.json  layer metadata
 """
 
 from __future__ import annotations
@@ -39,12 +39,12 @@ TARGETS = [
 
 
 def normalize_lon(lon: float) -> float:
-    """Pasa una longitud a 0..360 para casar con los rásteres THEMIS."""
+    """Converts a longitude to 0..360 to match the THEMIS rasters."""
     return lon % 360.0
 
 
 def dem_crop_bounds(target: str) -> tuple[float, float, float, float]:
-    """Devuelve (lonMin, latMin, lonMax, latMax) del recorte del DEM."""
+    """Returns (lonMin, latMin, lonMax, latMax) of the DEM crop."""
     meta_path = TERRAIN_DIR / target / "mars_height_meta.json"
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     source = DATA_DIR / meta["sourceFile"]
@@ -99,7 +99,7 @@ def process(target: str, rocky_name: str) -> None:
         )
 
     missing = np.isclose(destination, float(NODATA))
-    # average devuelve la fracción rocosa (0..1) en cada celda de salida.
+    # average returns the rocky fraction (0..1) in each output cell.
     mask = np.clip(np.rint(destination * (NODATA - 1)), 0, NODATA - 1).astype(
         np.uint8
     )
@@ -138,8 +138,8 @@ def process(target: str, rocky_name: str) -> None:
 
     print(
         f"{target}: {mask.shape[1]}x{mask.shape[0]} "
-        f"cobertura={meta['coverage']:.1%} "
-        f"rocosidad media={meta['rockyRatio']:.1%}"
+        f"coverage={meta['coverage']:.1%} "
+        f"mean rockiness={meta['rockyRatio']:.1%}"
     )
 
 

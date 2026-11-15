@@ -9,11 +9,11 @@ _BACKEND_DIR = Path(__file__).resolve().parent
 
 
 def _resolve_data_dir() -> Path:
-    """Localiza el directorio data/ en local y dentro del contenedor.
+    """Locates the data/ directory locally and inside the container.
 
-    - Local: el backend vive en <repo>/backend y los datos en <repo>/data.
-    - Docker: el backend vive en /app y los datos se montan en /app/data.
-    La variable de entorno DATA_DIR tiene prioridad si existe.
+    - Local: the backend lives in <repo>/backend and the data in <repo>/data.
+    - Docker: the backend lives in /app and the data is mounted at /app/data.
+    The DATA_DIR environment variable takes priority if it exists.
     """
     candidates: list[Path] = []
     env_dir = os.getenv("DATA_DIR")
@@ -30,7 +30,7 @@ def _resolve_data_dir() -> Path:
 
 DATA_DIR = _resolve_data_dir()
 
-# Compatibilidad: aceptar OLLAMA_URL o OLLAMA_HOST
+# Compatibility: accept OLLAMA_URL or OLLAMA_HOST
 OLLAMA_MODEL = os.getenv("MODEL_OLLAMA") or "LUIS BERNAL"
 
 OLLAMA_URL = (

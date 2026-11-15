@@ -13,7 +13,7 @@ from config import (
 from utils import _load_zone_locations
 
 async def systemone(state: Any, questions: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    """Envía una petición al endpoint /v1/systemone de un modelo de decisión."""
+    """Sends a request to the /v1/systemone endpoint of a decision model."""
     url = f"{OLLAMA_URL}/v1/systemone"
     payload: dict[str, Any] = {
         "model": OLLAMA_MODEL,
@@ -32,12 +32,12 @@ async def systemone(state: Any, questions: dict[str, dict[str, Any]]) -> dict[st
         if response.is_error:
             detail = response.text
             raise ValueError(
-                f"Error {response.status_code} en /v1/systemone: {detail}"
+                f"Error {response.status_code} in /v1/systemone: {detail}"
             )
         data = response.json()
 
     if not isinstance(data, dict):
-        raise ValueError("La respuesta de /v1/systemone no es un objeto JSON válido.")
+        raise ValueError("The /v1/systemone response is not a valid JSON object.")
 
     print(json.dumps(data, indent=4))
     return data
@@ -149,7 +149,7 @@ async def interpret_instruction(
     instruction: str,
     zone: str | None = None,
 ) -> dict[str, Any]:
-    """Interpreta una instrucción en dos pasos: identificar acción y extraer parámetros."""
+    """Interprets an instruction in two steps: identify the action and extract parameters."""
     action = await _select_action(instruction)
     options = await _extract_options(action, instruction, zone=zone)
     return {"action": action, "options": options}

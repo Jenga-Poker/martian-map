@@ -6,15 +6,15 @@ from pathlib import Path
 import numpy as np
 import rasterio
 
-# Debe coincidir con DATA_DIR de pathfinding.py.
+# Must match DATA_DIR in pathfinding.py.
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
 
 def resolve_zone_file(zone: str) -> Path:
-    """Resuelve un nombre de zona a un GeoTIFF dentro de data/."""
+    """Resolves a zone name to a GeoTIFF inside data/."""
     safe_name = Path(zone).name
     if safe_name != zone or not safe_name:
-        raise ValueError("Nombre de zona inválido.")
+        raise ValueError("Invalid zone name.")
 
     if safe_name.lower().endswith(".npz"):
         safe_name = safe_name[:-4]
@@ -25,19 +25,19 @@ def resolve_zone_file(zone: str) -> Path:
     for candidate in candidates:
         if candidate.is_file():
             return candidate
-    raise FileNotFoundError(f"No se encontró el GeoTIFF de la zona en data/: {zone}")
+    raise FileNotFoundError(f"Zone GeoTIFF not found in data/: {zone}")
 
 
 def preprocess_zone(zone: str, *, overwrite: bool = False) -> Path:
-    """Convierte un GeoTIFF en un .npz autocontenido para pathfinding.py."""
+    """Converts a GeoTIFF into a self-contained .npz for pathfinding.py."""
     source = resolve_zone_file(zone)
     output = DATA_DIR / f"{source.stem}.npz"
     if output.exists() and not overwrite:
-        print(f"[preprocess] Ya existe; no se modifica: {output}")
+        print(f"[preprocess] Already exists; leaving unchanged: {output}")
         return output
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    print(f"[preprocess] Leyendo {source.name}")
+    print(f"[preprocess] Reading {source.name}")
     with rasterio.open(source) as dataset:
         dem = dataset.read(1).astype(np.float32, copy=False)
         transform = np.asarray(tuple(dataset.transform), dtype=np.float64)
@@ -49,7 +49,7 @@ def preprocess_zone(zone: str, *, overwrite: bool = False) -> Path:
             dtype=np.float64,
         )
 
-    # Escritura atómica: evita dejar un .npz incompleto si el proceso se interrumpe.
+    # Atomic write: avoids leaving an incomplete .npz if the process is interrupted.
     temporary = output.with_name(output.name + ".tmp.npz")
     np.savez_compressed(
         temporary,
@@ -61,7 +61,7 @@ def preprocess_zone(zone: str, *, overwrite: bool = False) -> Path:
     )
     temporary.replace(output)
     print(
-        f"[preprocess] Guardado {output.name}: {dem.shape[0]}x{dem.shape[1]}, "
+        f"[preprocess] Saved {output.name}: {dem.shape[0]}x{dem.shape[1]}, "
         f"{output.stat().st_size / (1024 * 1024):.1f} MiB"
     )
     return output
@@ -69,12 +69,12 @@ def preprocess_zone(zone: str, *, overwrite: bool = False) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Preprocesa todos los GeoTIFF de data/ a archivos binarios .npz."
+        description="Preprocesses all GeoTIFFs in data/ into .npz binary files."
     )
     parser.add_argument(
         "--overwrite",
         action="store_true",
-        help="Recrear los .npz aunque ya existan.",
+        help="Recreate the .npz files even if they already exist.",
     )
     args = parser.parse_args()
 
@@ -85,10 +85,10 @@ def main() -> None:
     )
 
     if not tif_files:
-        print(f"[preprocess] No se encontraron archivos .tif/.tiff en {DATA_DIR}")
+        print(f"[preprocess] No .tif/.tiff files found in {DATA_DIR}")
         return
 
-    print(f"[preprocess] Encontrados {len(tif_files)} GeoTIFF en {DATA_DIR}")
+    print(f"[preprocess] Found {len(tif_files)} GeoTIFF(s) in {DATA_DIR}")
     succeeded = 0
     failed = 0
 
@@ -96,7 +96,7 @@ def main() -> None:
         try:
             output = DATA_DIR / f"{source.stem}.npz"
             if output.exists() and not args.overwrite:
-                print(f"[preprocess] Ya existe; se omite: {output.name}")
+                print(f"[preprocess] Already exists; skipping: {output.name}")
                 succeeded += 1
                 continue
 
@@ -104,11 +104,11 @@ def main() -> None:
             succeeded += 1
         except Exception as exc:
             failed += 1
-            print(f"[preprocess] ERROR en {source.name}: {exc}")
+            print(f"[preprocess] ERROR in {source.name}: {exc}")
 
     print(
-        f"[preprocess] Finalizado: {succeeded} correcto(s), "
-        f"{failed} error(es), de {len(tif_files)} archivo(s)."
+        f"[preprocess] Finished: {succeeded} succeeded, "
+        f"{failed} failed, out of {len(tif_files)} file(s)."
     )
     if failed:
         raise SystemExit(1)

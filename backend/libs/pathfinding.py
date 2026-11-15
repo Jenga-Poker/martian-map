@@ -13,19 +13,19 @@ from rasterio.warp import transform as warp_transform
 
 from config import DATA_DIR
 
-# Multiplicadores por defecto del coste de pendiente (pendiente^2).
-# 0    -> ruta más corta (solo distancia)
-# 100  -> ruta equilibrada
-# 1000 -> evita pendientes con fuerza: da el rodeo por las llanuras
-# Si 1000 aún no es suficientemente llano, prueba 3000 o 5000.
+# Default multipliers for the slope cost (slope^2).
+# 0    -> shortest route (distance only)
+# 100  -> balanced route
+# 1000 -> strongly avoids slopes: takes the detour through the plains
+# If 1000 is still not flat enough, try 3000 or 5000.
 HEIGHT_MULTIPLIERS = (0.0, 100.0, 1000.0)
 
 
 def resolve_preprocessed_file(zone: str) -> Path:
-    """Localiza el raster binario preprocesado (.npz) dentro de data/."""
+    """Locates the preprocessed binary raster (.npz) inside data/."""
     safe_name = Path(zone).name
     if safe_name != zone or not safe_name:
-        raise ValueError("Nombre de zona inválido.")
+        raise ValueError("Invalid zone name.")
 
     if safe_name.lower().endswith(".tif"):
         safe_name = safe_name[:-4]
@@ -39,15 +39,15 @@ def resolve_preprocessed_file(zone: str) -> Path:
         if candidates:
             return candidates[0]
         raise FileNotFoundError(
-            f"No existe el binario preprocesado: {path}. "
-            "Ejecuta primero preprocess_dem.py para generar el archivo .npz."
+            f"Preprocessed binary does not exist: {path}. "
+            "Run preprocess_dem.py first to generate the .npz file."
         )
     return path
 
 
 @lru_cache(maxsize=4)
 def _load_preprocessed_dem(binary_path: str):
-    """Carga y mantiene en caché el DEM binario para reutilizarlo entre rutas."""
+    """Loads and caches the binary DEM to reuse it across routes."""
     with np.load(binary_path, allow_pickle=False) as data:
         dem = data["dem"].astype(np.float32, copy=False)
         transform = Affine(*data["transform"].tolist())
@@ -61,11 +61,11 @@ def _load_preprocessed_dem(binary_path: str):
 
 
 def _geographic_crs(crs: CRS | None) -> CRS | None:
-    """Devuelve el CRS geográfico asociado a un CRS proyectado.
+    """Returns the geographic CRS associated with a projected CRS.
 
-    ``CRS.geodetic_crs`` no existe en rasterio 1.4 (la versión del contenedor),
-    así que en ese caso reconstruimos el CRS geográfico a partir de los
-    parámetros del elipsoide/datum del CRS proyectado.
+    ``CRS.geodetic_crs`` does not exist in rasterio 1.4 (the container version),
+    so in that case we rebuild the geographic CRS from the
+    ellipsoid/datum parameters of the projected CRS.
     """
     if crs is None or crs.is_geographic:
         return crs
@@ -86,10 +86,10 @@ def _geographic_crs(crs: CRS | None) -> CRS | None:
 
 
 def _pixel_size_meters(transform: Affine, crs: CRS | None, ref_lat: float) -> float:
-    """Tamaño de píxel en metros (necesario para calcular pendientes reales)."""
+    """Pixel size in meters (needed to compute real slopes)."""
     size = abs(transform.a)
     if crs is not None and crs.is_geographic:
-        # Grados -> metros aprox. (radio de Marte por defecto si el CRS lo indica).
+        # Degrees -> meters approx. (Mars radius by default if the CRS provides it).
         radius = 3_389_500.0
         try:
             ellipsoid = crs.ellipsoid_params if hasattr(crs, "ellipsoid_params") else None
@@ -120,41 +120,41 @@ def _astar_grid(
     progress_interval: int = 50000,
     height_multipliers: Iterable[float] = HEIGHT_MULTIPLIERS,
 ) -> dict[float, tuple[list[tuple[int, int]], float]]:
-    """A* sobre una grilla 8-conexa usando NetworkX.
+    """A* over an 8-connected grid using NetworkX.
 
-    Coste de cada arista (en metros equivalentes):
+    Cost of each edge (in equivalent meters):
 
-        coste = dist_m * (1 + multiplier * pendiente^2)
+        cost = dist_m * (1 + multiplier * slope^2)
 
-    donde ``pendiente = desnivel / dist_m``. Al elevar la pendiente al cuadrado,
-    las zonas empinadas se penalizan mucho más que las suaves, de modo que un
-    multiplicador alto empuja la ruta hacia las llanuras aunque el camino sea
-    más largo. Como coste >= dist_m, la heurística euclídea (en metros) es
-    admisible.
+    where ``slope = height_diff / dist_m``. By squaring the slope,
+    steep areas are penalized much more than gentle ones, so a
+    high multiplier pushes the route toward the plains even if the path is
+    longer. Since cost >= dist_m, the Euclidean heuristic (in meters) is
+    admissible.
     """
     rows, cols = dem.shape
     sr, sc = start
     er, ec = end
 
     if not (0 <= sr < rows and 0 <= sc < cols and 0 <= er < rows and 0 <= ec < cols):
-        raise ValueError("Los puntos de inicio o destino no son válidos en el grafo.")
+        raise ValueError("The start or end points are not valid in the graph.")
 
     finite = np.isfinite(dem) & (dem > -9000.0)
     if not finite[sr, sc] or not finite[er, ec]:
-        raise ValueError("Los puntos de inicio o destino no son válidos en el grafo.")
+        raise ValueError("The start or end points are not valid in the graph.")
 
-    step_m = cell_step * pixel_size  # metros entre nodos vecinos cardinales
+    step_m = cell_step * pixel_size  # meters between cardinal neighbor nodes
     total_cells = rows * cols
     start_dist = math.hypot(er - sr, ec - sc) * step_m
     _report_progress(
         progress,
-        f"[pathfinding] Construyendo grafo NetworkX: grilla={rows}x{cols} ({total_cells} nodos), "
-        f"paso={cell_step} celda(s) = {step_m:.1f} m, conectividad=8, "
-        f"distancia inicial={start_dist:.1f} m, max_height_diff={max_height_diff}",
+        f"[pathfinding] Building NetworkX graph: grid={rows}x{cols} ({total_cells} nodes), "
+        f"step={cell_step} cell(s) = {step_m:.1f} m, connectivity=8, "
+        f"initial distance={start_dist:.1f} m, max_height_diff={max_height_diff}",
     )
 
     graph = nx.Graph()
-    # Direcciones "hacia delante": cubren las 8 vecindades sin duplicar aristas.
+    # "Forward" directions: cover the 8 neighborhoods without duplicating edges.
     directions = ((0, 1, 1.0), (1, 0, 1.0), (1, 1, math.sqrt(2.0)), (1, -1, math.sqrt(2.0)))
     for r in range(rows):
         for c in range(cols):
@@ -175,8 +175,8 @@ def _astar_grid(
 
                 dist_m = dist_mul * step_m
                 slope = height_diff / dist_m
-                # Guardamos distancia y pendiente^2 por separado para reutilizar
-                # el mismo grafo con distintos multiplicadores.
+                # We store distance and slope^2 separately to reuse
+                # the same graph with different multipliers.
                 graph.add_edge(
                     u,
                     (nr, nc),
@@ -186,12 +186,12 @@ def _astar_grid(
                 )
 
     if start not in graph or end not in graph:
-        raise ValueError("Los puntos de inicio o destino no son válidos en el grafo.")
+        raise ValueError("The start or end points are not valid in the graph.")
 
     _report_progress(
         progress,
-        f"[pathfinding] Grafo listo: nodos={graph.number_of_nodes()}, aristas={graph.number_of_edges()}. "
-        "Ejecutando A* (NetworkX, 8-conexo)...",
+        f"[pathfinding] Graph ready: nodes={graph.number_of_nodes()}, edges={graph.number_of_edges()}. "
+        "Running A* (NetworkX, 8-connected)...",
     )
 
     def heuristic(u: tuple[int, int], v: tuple[int, int]) -> float:
@@ -215,10 +215,10 @@ def _astar_grid(
         except nx.NetworkXNoPath as exc:
             _report_progress(
                 progress,
-                f"[pathfinding] Sin ruta para height_multiplier={multiplier}",
+                f"[pathfinding] No route for height_multiplier={multiplier}",
             )
             raise ValueError(
-                f"No se encontró una ruta válida para height_multiplier={multiplier}."
+                f"No valid route found for height_multiplier={multiplier}."
             ) from exc
 
         total_cost = float(sum(
@@ -228,8 +228,8 @@ def _astar_grid(
         results[multiplier] = (list(path), total_cost)
         _report_progress(
             progress,
-            f"[pathfinding] Ruta encontrada: multiplier={multiplier}, "
-            f"{len(path)} puntos, coste={total_cost:.3f}",
+            f"[pathfinding] Route found: multiplier={multiplier}, "
+            f"{len(path)} points, cost={total_cost:.3f}",
         )
 
     return results
@@ -249,45 +249,45 @@ def shortest_path(
     min_margin: int = 300,
     margin_factor: float = 1.0,
 ) -> list[dict]:
-    """Calcula tres rutas entre dos coordenadas geográficas en un DEM.
+    """Computes three routes between two geographic coordinates on a DEM.
 
-    Lee un DEM binario .npz preprocesado, recorta una ventana de búsqueda
-    alrededor de inicio y destino, la submuestrea y ejecuta A* 8-conexo con
-    un coste de pendiente cuadrática (ver ``_astar_grid``).
+    Reads a preprocessed binary .npz DEM, crops a search window
+    around start and end, downsamples it and runs 8-connected A* with
+    a quadratic slope cost (see ``_astar_grid``).
 
     Args:
-        zone: Nombre de zona del binario .npz dentro de data/ (con o sin extensión).
-        start: Coordenada de inicio [latitud, longitud] en grados.
-        end: Coordenada de destino [latitud, longitud] en grados.
-        max_height_diff: Desnivel máximo permitido por celda del DEM original;
-            con submuestreo se escala por el paso entre nodos.
-        progress: Callback ``callable(str)`` para mensajes de progreso.
-        progress_interval: Conservado por compatibilidad.
-        sample_points: Puntos aproximados por lado de la grilla de búsqueda.
-            ``None`` o <=0 usa resolución completa.
-        height_multiplier_1/2/3: Pesos de la pendiente^2. Valores altos evitan
-            pendientes y favorecen las llanuras. Deben ser distintos y >= 0.
-        min_margin: Margen mínimo (celdas) alrededor del rectángulo inicio-fin.
-        margin_factor: Margen proporcional a la distancia inicio-fin (en celdas).
-            Aumentarlo deja a A* explorar llanuras más alejadas.
+        zone: Zone name of the .npz binary inside data/ (with or without extension).
+        start: Start coordinate [latitude, longitude] in degrees.
+        end: End coordinate [latitude, longitude] in degrees.
+        max_height_diff: Maximum height difference allowed per cell of the original
+            DEM; with downsampling it is scaled by the step between nodes.
+        progress: Callback ``callable(str)`` for progress messages.
+        progress_interval: Kept for compatibility.
+        sample_points: Approximate points per side of the search grid.
+            ``None`` or <=0 uses full resolution.
+        height_multiplier_1/2/3: Weights of slope^2. High values avoid
+            slopes and favor the plains. Must be distinct and >= 0.
+        min_margin: Minimum margin (cells) around the start-end rectangle.
+        margin_factor: Margin proportional to the start-end distance (in cells).
+            Increasing it lets A* explore more distant plains.
 
     Returns:
-        Lista de rutas, una por multiplicador.
+        List of routes, one per multiplier.
     """
     dem_path = resolve_preprocessed_file(zone)
 
     start_geo = (float(start[0]), float(start[1]))
     end_geo = (float(end[0]), float(end[1]))
 
-    _report_progress(progress, f"[pathfinding] Binario preprocesado: {dem_path.name}")
-    _report_progress(progress, f"[pathfinding] Coordenadas: inicio={start_geo}, fin={end_geo}")
+    _report_progress(progress, f"[pathfinding] Preprocessed binary: {dem_path.name}")
+    _report_progress(progress, f"[pathfinding] Coordinates: start={start_geo}, end={end_geo}")
 
     dem, transform, crs, nodata, bounds = _load_preprocessed_dem(str(dem_path.resolve()))
     height, width = dem.shape
     geographic_crs = _geographic_crs(crs)
 
     def to_pixel(lat: float, lon: float) -> tuple[int, int]:
-        # La API recibe lat/lon en grados, pero los DEM proyectados usan metros.
+        # The API receives lat/lon in degrees, but projected DEMs use meters.
         if crs is not None and crs.is_projected and geographic_crs is not None:
             xs, ys = warp_transform(geographic_crs, crs, [lon], [lat])
             x, y = float(xs[0]), float(ys[0])
@@ -301,7 +301,7 @@ def shortest_path(
     end_pt = to_pixel(*end_geo)
     _report_progress(
         progress,
-        f"[pathfinding] Píxeles: inicio={start_pt}, fin={end_pt}, DEM={height}x{width}",
+        f"[pathfinding] Pixels: start={start_pt}, end={end_pt}, DEM={height}x{width}",
     )
 
     for name, (r, c), (lat, lon) in (
@@ -310,12 +310,12 @@ def shortest_path(
     ):
         if not (0 <= r < height and 0 <= c < width):
             raise ValueError(
-                f"La coordenada {name} ({lat}, {lon}) está fuera del área del DEM "
-                f"(extensión del raster: {bounds})."
+                f"The {name} coordinate ({lat}, {lon}) is outside the DEM area "
+                f"(raster extent: {bounds})."
             )
 
-    # Ventana de búsqueda más amplia: sin margen suficiente, A* no puede llegar
-    # a las llanuras aunque el multiplicador las favorezca.
+    # Wider search window: without enough margin, A* cannot reach
+    # the plains even if the multiplier favors them.
     dist = max(abs(end_pt[0] - start_pt[0]), abs(end_pt[1] - start_pt[1]))
     margin = max(int(min_margin), int(dist * margin_factor))
 
@@ -325,13 +325,13 @@ def shortest_path(
     c1 = min(width, max(start_pt[1], end_pt[1]) + margin + 1)
     _report_progress(
         progress,
-        f"[pathfinding] Ventana de búsqueda: filas [{r0}, {r1}), cols [{c0}, {c1}) "
-        f"-> {r1 - r0}x{c1 - c0} celdas, margen={margin}",
+        f"[pathfinding] Search window: rows [{r0}, {r1}), cols [{c0}, {c1}) "
+        f"-> {r1 - r0}x{c1 - c0} cells, margin={margin}",
     )
 
     sub_dem = dem[r0:r1, c0:c1].astype(np.float32, copy=True)
     if sub_dem.size == 0:
-        raise ValueError("El área de búsqueda resultante está vacía.")
+        raise ValueError("The resulting search area is empty.")
 
     if nodata is not None:
         sub_dem[sub_dem == nodata] = np.nan
@@ -349,15 +349,15 @@ def shortest_path(
     grid_h, grid_w = grid_dem.shape
     local_start = (min(ls_r // stride, grid_h - 1), min(ls_c // stride, grid_w - 1))
     local_end = (min(le_r // stride, grid_h - 1), min(le_c // stride, grid_w - 1))
-    # Aseguramos que los extremos exactos estén representados en la grilla gruesa.
+    # Ensure the exact endpoints are represented in the coarse grid.
     grid_dem = grid_dem.copy()
     grid_dem[local_start[0], local_start[1]] = sub_dem[ls_r, ls_c]
     grid_dem[local_end[0], local_end[1]] = sub_dem[le_r, le_c]
 
     _report_progress(
         progress,
-        f"[pathfinding] Submuestreo: paso={stride} -> grilla {grid_h}x{grid_w} "
-        f"({grid_h * grid_w} nodos) desde ventana {sub_h}x{sub_w}",
+        f"[pathfinding] Downsampling: step={stride} -> grid {grid_h}x{grid_w} "
+        f"({grid_h * grid_w} nodes) from window {sub_h}x{sub_w}",
     )
 
     multipliers = (
@@ -366,12 +366,12 @@ def shortest_path(
         float(height_multiplier_3),
     )
     if len(set(multipliers)) != 3:
-        raise ValueError("Los tres height_multiplier deben ser distintos.")
+        raise ValueError("The three height_multipliers must be distinct.")
     if any(value < 0 for value in multipliers):
-        raise ValueError("Los height_multipliers no pueden ser negativos.")
+        raise ValueError("The height_multipliers cannot be negative.")
 
     pixel_size = _pixel_size_meters(transform, crs, ref_lat=start_geo[0])
-    _report_progress(progress, f"[pathfinding] Tamaño de píxel: {pixel_size:.3f} m")
+    _report_progress(progress, f"[pathfinding] Pixel size: {pixel_size:.3f} m")
 
     local_results = _astar_grid(
         grid_dem,
@@ -415,8 +415,8 @@ def shortest_path(
         })
         _report_progress(
             progress,
-            f"[pathfinding] Completada ruta multiplier={multiplier}: "
-            f"{len(path)} puntos, variación de altura={total_height_variation:.3f}",
+            f"[pathfinding] Completed route multiplier={multiplier}: "
+            f"{len(path)} points, height variation={total_height_variation:.3f}",
         )
 
     return routes
