@@ -24,4 +24,8 @@ sudo systemctl restart ollama
 ```
 ```
 
+Ponle esto a tu .env en backend:
 
+```
+OLLAMA_URL=http://host.docker.internal:11434
+```
