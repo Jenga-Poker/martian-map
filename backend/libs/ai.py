@@ -1,106 +1,16 @@
-import csv
 import json
-import os
-from pathlib import Path
 from typing import Any
 
 import httpx
-from dotenv import load_dotenv
 
-load_dotenv()
-
-# Compatibilidad: aceptar OLLAMA_URL o OLLAMA_HOST
-OLLAMA_MODEL = os.getenv("MODEL_OLLAMA") or "LUIS BERNAL"
-
-OLLAMA_URL = (
-    os.getenv("OLLAMA_URL")
-    or os.getenv("OLLAMA_HOST")
-    or "http://localhost:11434"
-).rstrip("/")
-OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")
-
-ACTIONS = {
-    "navigate_to": {
-        "description": "Calculates the shortest path from the user's location to another point.",
-    }
-}
-
-LOCATIONS_FILE = Path(__file__).resolve().parents[2] / "data" / "locations.csv"
-
-# Rovers disponibles almacenados en el backend.
-BACKEND_ROVERS: list[dict[str, str]] = [
-    {
-        "id": "sojourner",
-        "name": "Sojourner",
-        "description": "Mars Pathfinder rover (1997)",
-    },
-    {
-        "id": "spirit",
-        "name": "Spirit",
-        "description": "MER-A rover (2004)",
-    },
-    {
-        "id": "opportunity",
-        "name": "Opportunity",
-        "description": "MER-B rover (2004)",
-    },
-    {
-        "id": "curiosity",
-        "name": "Curiosity",
-        "description": "MSL rover (2012)",
-    },
-    {
-        "id": "perseverance",
-        "name": "Perseverance",
-        "description": "Mars 2020 rover (2021)",
-    },
-]
-
-
-def _clean(value: str) -> str:
-    return (value or "").strip().strip('"')
-
-
-def _get_rovers() -> list[dict[str, str]]:
-    """Devuelve los rovers disponibles desde el backend."""
-    normalized: list[dict[str, str]] = []
-    seen: set[str] = set()
-    for rover in BACKEND_ROVERS:
-        rover_id = _clean(str(rover.get("id", "")))
-        if not rover_id or rover_id in seen:
-            continue
-        seen.add(rover_id)
-        normalized.append(
-            {
-                "id": rover_id,
-                "name": _clean(str(rover.get("name", ""))) or rover_id,
-                "description": _clean(str(rover.get("description", ""))),
-            }
-        )
-    return normalized
-
-
-def _load_zone_locations(zone: str | None) -> list[str]:
-    if not zone or not LOCATIONS_FILE.exists():
-        return []
-    zone_name = zone.strip()
-    names: list[str] = []
-    try:
-        with LOCATIONS_FILE.open(newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f, delimiter=";", skipinitialspace=True)
-            for row in reader:
-                if not row:
-                    continue
-                row_zone = _clean(row.get("ZONE", ""))
-                if row_zone != zone_name:
-                    continue
-                name = _clean(row.get("NAME", ""))
-                if name and name not in names:
-                    names.append(name)
-    except Exception:
-        return []
-    return names
-
+from config import (
+    ACTIONS,
+    BACKEND_VEHICLES,
+    OLLAMA_API_KEY,
+    OLLAMA_MODEL,
+    OLLAMA_URL,
+)
+from utils import _load_zone_locations
 
 async def systemone(state: Any, questions: dict[str, dict[str, Any]]) -> dict[str, Any]:
     """Envía una petición al endpoint /v1/systemone de un modelo de decisión."""
@@ -132,7 +42,6 @@ async def systemone(state: Any, questions: dict[str, dict[str, Any]]) -> dict[st
     print(json.dumps(data, indent=4))
     return data
 
-
 def _pick_choice(result: dict[str, Any], key: str) -> str:
     answers = result.get("answers", {}) if isinstance(result, dict) else {}
     answer = answers.get(key) if isinstance(answers, dict) else None
@@ -158,7 +67,6 @@ async def _select_action(instruction: str) -> str:
     result = await systemone(state, questions)
     return _pick_choice(result, "action")
 
-
 async def _extract_options(
     action: str,
     instruction: str,
@@ -170,7 +78,7 @@ async def _extract_options(
     location_names = _load_zone_locations(zone)
     end_options = location_names + ["not_specified"]
 
-    rover_list = _get_rovers()
+    rover_list = BACKEND_VEHICLES
     rover_ids = [rover["id"] for rover in rover_list]
     rover_options = rover_ids + ["not_specified"]
     rover_criteria = {
@@ -181,7 +89,7 @@ async def _extract_options(
         for rover in rover_list
     }
     rover_criteria["not_specified"] = (
-        "The rover is not mentioned or unclear."
+        "The vehicle is not mentioned or unclear."
     )
 
     end_criteria = {
@@ -193,10 +101,10 @@ async def _extract_options(
     )
 
     questions = {
-        "rover": {
+        "vehicle": {
             "type": "choice",
             "instructions": (
-                "Which rover should perform the task? "
+                "Which vehicle should perform the task? "
                 "Choose not_specified if not mentioned or unclear."
             ),
             "options": rover_options,
@@ -216,16 +124,11 @@ async def _extract_options(
     state = {
         "instruction": instruction,
         "action": action,
-        "available_rovers": [
-            {"id": rover["id"], "name": rover["name"]}
-            for rover in rover_list
-        ],
-        "available_locations": location_names,
     }
 
     result = await systemone(state, questions)
 
-    rover_choice = _pick_choice(result, "rover")
+    rover_choice = _pick_choice(result, "vehicle")
     rover_by_name = {
         rover["name"].lower(): rover["id"] for rover in rover_list
     }
@@ -236,10 +139,9 @@ async def _extract_options(
     end = _pick_choice(result, "end")
 
     return {
-        "rover": rover,
+        "vehicle": rover,
         "end": end if end != "not_specified" else None,
     }
-
 
 async def interpret_instruction(
     instruction: str,
@@ -248,6 +150,4 @@ async def interpret_instruction(
     """Interpreta una instrucción en dos pasos: identificar acción y extraer parámetros."""
     action = await _select_action(instruction)
     options = await _extract_options(action, instruction, zone=zone)
-    print("RESULT", action, options)
     return {"action": action, "options": options}
-
